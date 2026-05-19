@@ -1,0 +1,79 @@
+"""FastAPI 메인 앱 진입점"""
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
+
+from app.config import get_settings
+from app.database import engine, SessionLocal, Base
+from app.models import *   # noqa: F401 — 모든 모델 import (테이블 생성용)
+from app.mock_data import seed_database
+from app.routers import recommend, restaurants, users, weather
+
+settings = get_settings()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # 시작 시: 테이블 생성 + 목업 데이터 시드
+    Base.metadata.create_all(bind=engine)
+    db = SessionLocal()
+    try:
+        seed_database(db)
+    finally:
+        db.close()
+    print(f"🚀 {settings.APP_NAME} v{settings.APP_VERSION} 시작")
+    yield
+    print("👋 서버 종료")
+
+
+app = FastAPI(
+    title=settings.APP_NAME,
+    version=settings.APP_VERSION,
+    description="""
+## 식사 장소 추천 플랫폼 API
+
+대학생·직장인 맞춤형 식당 추천 서비스
+
+### 핵심 기능
+- `POST /api/recommend` — 조건 기반 식당 추천 (신분·목적·인원·위치·이동수단·시간·예산)
+- `GET /api/restaurant/{id}` — 식당 상세 (메뉴·혼잡도·가격 신뢰도)
+- `GET /api/weather` — 현재 날씨 (이동수단 권고 연동 예정)
+- JWT 기반 회원가입/로그인
+
+### Phase 2 예정
+- 네이버 플레이스 가격 수집
+- 카카오 모빌리티 경로 API
+- 기상청 날씨 연동
+    """,
+    lifespan=lifespan,
+)
+
+# CORS — Flutter 앱 및 개발 환경 허용
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # 운영 환경에서는 실제 도메인으로 제한
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# 라우터 등록
+app.include_router(recommend.router)
+app.include_router(restaurants.router)
+app.include_router(users.router)
+app.include_router(weather.router)
+
+
+@app.get("/", tags=["헬스체크"])
+def root():
+    return {
+        "service": settings.APP_NAME,
+        "version": settings.APP_VERSION,
+        "status": "running",
+        "docs": "/docs",
+    }
+
+
+@app.get("/health", tags=["헬스체크"])
+def health():
+    return {"status": "ok"}

@@ -1,0 +1,225 @@
+"""
+추천 엔진 — 기획서 3.1 / 3.2 구현
+탐색 반경 계산 + 추천 점수 산식
+"""
+import math
+import json
+from typing import List, Optional
+from sqlalchemy.orm import Session
+
+from app.config import get_settings
+from app.models import Restaurant
+from app.schemas import RecommendRequest, RestaurantCardOut, SortEnum
+
+settings = get_settings()
+
+# ─── 이동수단별 속도 (m/분) — 기획서 3.1 ────────────────────────
+SPEED_MAP = {
+    "도보": settings.SPEED_WALK,
+    "자전거": settings.SPEED_BIKE,
+    "대중교통": settings.SPEED_TRANSIT,
+    "자동차": settings.SPEED_CAR,
+}
+
+# ─── 목적별 가중치 — 기획서 3.2 ──────────────────────────────────
+# (분위기, 가성비, 접근성, 대화환경)
+PURPOSE_WEIGHTS = {
+    "혼밥":    {"atmosphere": 0.5,  "value": 1.5,  "access": 1.5, "social": 0.5},
+    "친목":    {"atmosphere": 1.0,  "value": 1.0,  "access": 1.0, "social": 1.5},
+    "소개팅":  {"atmosphere": 1.5,  "value": 0.5,  "access": 1.0, "social": 1.5},
+    "회식":    {"atmosphere": 1.0,  "value": 1.0,  "access": 1.5, "social": 1.5},
+    "비즈니스":{"atmosphere": 1.5,  "value": 0.5,  "access": 1.5, "social": 1.0},
+}
+
+# 소개팅/비즈니스 시 고급 카테고리 선호
+HIGH_ATMOSPHERE_CATEGORIES = {"한식", "일식"}
+# 혼밥 시 혼밥 가능 태그 보너스
+SOLO_FRIENDLY_TAG = "혼밥 가능"
+
+
+def calc_radius_meters(transport: str, available_minutes: int) -> int:
+    """
+    탐색 반경 계산 — 기획서 3.1
+    반경 = (가용시간 - 최소식사시간) / 2 × 속도
+    """
+    speed = SPEED_MAP.get(transport, settings.SPEED_WALK)
+    effective_minutes = max(0, available_minutes - settings.MIN_MEAL_MINUTES)
+    one_way_minutes = effective_minutes / 2
+    return int(one_way_minutes * speed)
+
+
+def calc_review_score(review_count: int) -> float:
+    """리뷰 수를 0~1 점수로 정규화 (로그 스케일)"""
+    if review_count <= 0:
+        return 0.0
+    return min(1.0, math.log10(review_count + 1) / math.log10(500))
+
+
+def calc_purpose_fit(restaurant: Restaurant, purpose: str, party_size: int) -> float:
+    """목적 적합도 — 0.0 ~ 1.0"""
+    score = 0.5  # 기본값
+    weights = PURPOSE_WEIGHTS.get(purpose, PURPOSE_WEIGHTS["혼밥"])
+    tags = json.loads(restaurant.tags or "[]")
+    features = json.loads(restaurant.features or "[]")
+    all_features = tags + features
+
+    # 혼밥 목적: 혼밥 가능 태그 보너스
+    if purpose == "혼밥":
+        if SOLO_FRIENDLY_TAG in all_features:
+            score += 0.3
+        if party_size == 1:
+            score += 0.2
+
+    # 회식/단체: 단체석 여부
+    if purpose in ("회식", "친목") and party_size >= 4:
+        if "단체석" in all_features:
+            score += 0.3
+
+    # 소개팅/비즈니스: 분위기 선호
+    if purpose in ("소개팅", "비즈니스"):
+        if restaurant.category in HIGH_ATMOSPHERE_CATEGORIES:
+            score += 0.2
+        if restaurant.crowd_level == "한산":
+            score += 0.1
+
+    # 접근성: 가까울수록 +
+    if restaurant.walk_minutes <= 5:
+        score += 0.1 * weights["access"]
+    elif restaurant.walk_minutes <= 10:
+        score += 0.05 * weights["access"]
+
+    return min(1.0, score)
+
+
+def calc_price_fit(restaurant: Restaurant, budget_cap: int) -> float:
+    """가격 적합도 — 예산 내면 높을수록 좋음"""
+    if restaurant.price > budget_cap + 2000:  # 2000원 여유
+        return 0.0
+    ratio = restaurant.price / budget_cap if budget_cap > 0 else 1.0
+    # 예산의 70~90% 범위가 최적
+    if 0.7 <= ratio <= 0.9:
+        return 1.0
+    elif ratio < 0.7:
+        return 0.7 + ratio * 0.3
+    else:
+        return max(0.0, 1.0 - (ratio - 0.9) * 5)
+
+
+def calc_total_score(
+    restaurant: Restaurant,
+    purpose: str,
+    party_size: int,
+    budget_cap: int,
+) -> float:
+    """
+    최종 점수 — 기획서 3.2
+    = (별점 × 0.3) + (리뷰수점수 × 0.2) + (목적적합도 × 0.3) + (가격적합도 × 0.2)
+    """
+    rating_score = (restaurant.rating / 5.0)
+    review_score = calc_review_score(restaurant.review_count)
+    purpose_score = calc_purpose_fit(restaurant, purpose, party_size)
+    price_score = calc_price_fit(restaurant, budget_cap)
+
+    return (
+        rating_score * 0.3
+        + review_score * 0.2
+        + purpose_score * 0.3
+        + price_score * 0.2
+    )
+
+
+def get_budget_cap(identity: str, price_mode: str, price_max: Optional[int]) -> int:
+    """예산 상한 결정 — 기본값은 신분 기반"""
+    if price_mode == "custom" and price_max:
+        return price_max
+    return 8000 if identity == "학생" else 12000
+
+
+def distance_meters(lat1, lng1, lat2, lng2) -> float:
+    """Haversine 공식으로 두 좌표 간 거리(m) 계산"""
+    R = 6_371_000
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    d_phi = math.radians(lat2 - lat1)
+    d_lambda = math.radians(lng2 - lng1)
+    a = math.sin(d_phi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(d_lambda / 2) ** 2
+    return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+
+def recommend(db: Session, req: RecommendRequest) -> dict:
+    """추천 메인 로직"""
+    radius = calc_radius_meters(req.transport.value, req.available_minutes)
+    budget_cap = get_budget_cap(req.identity.value, req.price_mode.value, req.price_max)
+
+    # 1) 전체 식당 조회
+    restaurants: List[Restaurant] = db.query(Restaurant).all()
+
+    # 2) 필터링: 거리 + 예산
+    filtered = []
+    for r in restaurants:
+        # 거리 필터 (좌표 기반 or walk_minutes 기반)
+        if req.lat and req.lng:
+            dist = distance_meters(req.lat, req.lng, r.lat, r.lng)
+            walk_est = dist / settings.SPEED_WALK  # 도보 환산
+        else:
+            walk_est = r.walk_minutes
+
+        if walk_est > (req.available_minutes - settings.MIN_MEAL_MINUTES) / 2:
+            continue
+
+        # 예산 필터 (2000원 여유)
+        if r.price > budget_cap + 2000:
+            continue
+
+        filtered.append(r)
+
+    # 3) 점수 산출
+    scored = []
+    for r in filtered:
+        score = calc_total_score(r, req.purpose.value, req.party_size, budget_cap)
+        scored.append((r, score))
+
+    # 4) 정렬
+    if req.sort == SortEnum.recommended:
+        scored.sort(key=lambda x: x[1], reverse=True)
+    elif req.sort == SortEnum.distance:
+        scored.sort(key=lambda x: x[0].walk_minutes)
+    elif req.sort == SortEnum.price:
+        scored.sort(key=lambda x: x[0].price)
+
+    # 5) 직렬화
+    results = []
+    for r, score in scored[:8]:
+        tags = json.loads(r.tags or "[]")
+        results.append(RestaurantCardOut(
+            id=r.id,
+            name=r.name,
+            category=r.category,
+            crowd_level=r.crowd_level,
+            rating=r.rating,
+            review_count=r.review_count,
+            walk_minutes=r.walk_minutes,
+            price=r.price,
+            price_confidence=r.price_confidence,
+            tags=tags,
+            photo_url=r.photo_url,
+            hero_icon=r.hero_icon,
+            hero_hue=r.hero_hue,
+            score=round(score, 4),
+        ))
+
+    # 요약 문구
+    time_label = {30: "30분", 60: "1시간", 90: "1.5시간", 120: "2시간+"}.get(
+        req.available_minutes, f"{req.available_minutes}분"
+    )
+    summary = (
+        f"{req.transport.value} {time_label} 이내 · "
+        f"~{budget_cap:,}원 · {req.purpose.value} {req.party_size}인"
+    )
+
+    return {
+        "total": len(results),
+        "radius_meters": radius,
+        "budget_cap": budget_cap,
+        "summary": summary,
+        "results": results,
+    }

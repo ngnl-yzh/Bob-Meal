@@ -1,0 +1,46 @@
+name: restaurant_recommender
+description: "식사 장소 추천 앱 — 대학생·직장인 맞춤형 식당 추천 서비스"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.2.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # HTTP
+  http: ^1.2.1
+  dio: ^5.7.0
+
+  # 상태 관리
+  provider: ^6.1.2
+
+  # 위치
+  geolocator: ^13.0.1
+  permission_handler: ^11.3.1
+
+  # 지도
+  url_launcher: ^6.3.0
+
+  # 이미지
+  cached_network_image: ^3.4.1
+
+  # 스토리지 (토큰 저장)
+  shared_preferences: ^2.3.3
+  flutter_secure_storage: ^9.2.2
+
+  # UI
+  shimmer: ^3.0.0
+  flutter_rating_bar: ^4.0.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
