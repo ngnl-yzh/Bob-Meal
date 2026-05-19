@@ -41,6 +41,7 @@ def _run_collect(region: str, limit: int | None):
     """백그라운드 수집 실행"""
     global _collect_status
     _collect_status["running"] = True
+    _collect_status["count"] = 0
     try:
         import sys, os
         # Railway: 실행 디렉토리가 backend/ 이므로 collect_restaurants.py 가 cwd에 있음
@@ -55,7 +56,7 @@ def _run_collect(region: str, limit: int | None):
         from collect_restaurants import collect
 
         regions = ["gwangju", "jeonnam"] if region == "all" else [region]
-        count = collect(regions, limit=limit)
+        count = collect(regions, limit=limit, progress_status=_collect_status)
         _collect_status["count"] = count
         _collect_status["last"] = f"완료: {count}개 수집"
     except Exception as e:

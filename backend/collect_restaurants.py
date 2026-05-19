@@ -202,6 +202,7 @@ def collect(
     regions: list[str],
     limit: Optional[int] = None,
     dry_run: bool = False,
+    progress_status: Optional[dict] = None,  # 실시간 진행 상황 업데이트용
 ) -> int:
     if not settings.KAKAO_REST_API_KEY:
         print("❌  KAKAO_REST_API_KEY 가 .env 에 설정되지 않았습니다.")
@@ -318,9 +319,15 @@ def collect(
 
                                 total_new += 1
 
-                                # N개마다 중간 커밋
+                                # N개마다 중간 커밋 + 실시간 상태 업데이트
                                 if not dry_run and total_new % commit_every == 0:
                                     db.commit()
+                                    if progress_status is not None:
+                                        progress_status["count"] = total_new
+                                        progress_status["last"] = (
+                                            f"수집 중: {total_new:,}개 저장 "
+                                            f"(중복 {total_skip:,}개 건너뜀)"
+                                        )
                                     print(
                                         f"  [{pt_idx+1}/{len(pts)}] ✅ {total_new:,}개 저장 "
                                         f"(중복 건너뜀 {total_skip:,})"
