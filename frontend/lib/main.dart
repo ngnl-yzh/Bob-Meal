@@ -36,7 +36,7 @@ class RestaurantApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: '식당 추천',
+      title: '한끼로그',
       debugShowCheckedModeBanner: false,
       theme: buildAppTheme(),
       home: const AppRoot(),
@@ -172,7 +172,7 @@ class _AppRootState extends State<AppRoot> {
                   borderRadius: BorderRadius.circular(18),
                 ),
                 child: const Center(
-                  child: Text('밥',
+                  child: Text('끼',
                       style: TextStyle(
                         fontSize: 28,
                         fontWeight: FontWeight.w800,

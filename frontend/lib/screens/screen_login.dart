@@ -100,7 +100,7 @@ class _ScreenLoginState extends State<ScreenLogin> {
                       borderRadius: BorderRadius.circular(18),
                     ),
                     child: const Center(
-                      child: Text('밥',
+                      child: Text('끼',
                           style: TextStyle(
                             fontSize: 28,
                             fontWeight: FontWeight.w800,
@@ -111,7 +111,7 @@ class _ScreenLoginState extends State<ScreenLogin> {
                 ),
                 const SizedBox(height: 20),
                 const Center(
-                  child: Text('식사 장소 추천',
+                  child: Text('한끼로그',
                       style: TextStyle(
                         fontFamily: 'Pretendard',
                         fontSize: 22,
@@ -122,7 +122,7 @@ class _ScreenLoginState extends State<ScreenLogin> {
                 ),
                 const SizedBox(height: 4),
                 const Center(
-                  child: Text('오늘 뭐 먹을지 고민되면 밥이 알려드려요',
+                  child: Text('오늘 한끼, 어디서 먹을지 고민될 때',
                       style: TextStyle(
                         fontFamily: 'Pretendard',
                         fontSize: 13,

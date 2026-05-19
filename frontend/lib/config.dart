@@ -11,7 +11,7 @@ class AppConfig {
   // Railway 배포 후 _prodUrl 을 실제 URL 로 교체하세요:
   //   예) https://bob-meal-production.up.railway.app
   static const String _devUrl  = 'http://127.0.0.1:8000';
-  static const String _prodUrl = 'https://YOUR-APP.up.railway.app'; // ← 교체 필요
+  static const String _prodUrl = 'https://bob-meal-production.up.railway.app';
 
   static String get baseUrl => kDebugMode ? _devUrl : _prodUrl;
 
