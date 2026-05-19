@@ -111,7 +111,7 @@ class _ScreenLoginState extends State<ScreenLogin> {
                 ),
                 const SizedBox(height: 20),
                 const Center(
-                  child: Text('한끼로그',
+                  child: Text('한끼루트',
                       style: TextStyle(
                         fontFamily: 'Pretendard',
                         fontSize: 22,

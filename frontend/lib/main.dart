@@ -36,7 +36,7 @@ class RestaurantApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: '한끼로그',
+      title: '한끼루트',
       debugShowCheckedModeBanner: false,
       theme: buildAppTheme(),
       home: const AppRoot(),

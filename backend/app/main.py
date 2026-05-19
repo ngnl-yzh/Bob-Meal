@@ -30,7 +30,7 @@ app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
     description="""
-## 한끼로그 API
+## 한끼루트 API
 
 대학생·직장인 맞춤형 식사 장소 추천 서비스
 

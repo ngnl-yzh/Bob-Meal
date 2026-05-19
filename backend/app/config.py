@@ -6,7 +6,7 @@ from typing import List
 
 class Settings(BaseSettings):
     # ─── 앱 기본 ──────────────────────────────────────────────
-    APP_NAME: str = "한끼로그 API"
+    APP_NAME: str = "한끼루트 API"
     APP_VERSION: str = "1.0.0"
     DEBUG: bool = True
 

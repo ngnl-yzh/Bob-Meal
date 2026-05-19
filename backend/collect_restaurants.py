@@ -390,7 +390,7 @@ def main():
 
     regions = ["gwangju", "jeonnam"] if args.region == "all" else [args.region]
 
-    print("한끼로그 식당 수집기")
+    print("한끼루트 식당 수집기")
     print(f"  지역  : {', '.join(r for r in regions)}")
     print(f"  한도  : {args.limit or '무제한'}")
     print(f"  모드  : {'DRY-RUN' if args.dry_run else '실제 저장'}")
