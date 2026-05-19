@@ -4,7 +4,7 @@
 """
 import math
 import json
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -64,8 +64,16 @@ def calc_review_score(review_count: int) -> float:
     return min(1.0, math.log10(review_count + 1) / math.log10(500))
 
 
-def calc_purpose_fit(restaurant: Restaurant, purpose: str, party_size: int) -> float:
-    """목적 적합도 — 0.0 ~ 1.0"""
+def calc_purpose_fit(
+    restaurant: Restaurant,
+    purpose: str,
+    party_size: int,
+    calc_walk_minutes: Optional[int] = None,
+) -> float:
+    """목적 적합도 — 0.0 ~ 1.0
+
+    calc_walk_minutes: 동적으로 계산된 도보 분 (없으면 DB 저장값 사용)
+    """
     score = 0.5  # 기본값
     weights = PURPOSE_WEIGHTS.get(purpose, PURPOSE_WEIGHTS["혼밥"])
     tags = json.loads(restaurant.tags or "[]")
@@ -91,10 +99,11 @@ def calc_purpose_fit(restaurant: Restaurant, purpose: str, party_size: int) -> f
         if restaurant.crowd_level == "한산":
             score += 0.1
 
-    # 접근성: 가까울수록 +
-    if restaurant.walk_minutes <= 5:
+    # 접근성: 가까울수록 + (동적 계산값 우선 사용)
+    walk = calc_walk_minutes if calc_walk_minutes is not None else restaurant.walk_minutes
+    if walk <= 5:
         score += 0.1 * weights["access"]
-    elif restaurant.walk_minutes <= 10:
+    elif walk <= 10:
         score += 0.05 * weights["access"]
 
     return min(1.0, score)
@@ -144,6 +153,7 @@ def calc_total_score(
     party_size: int,
     budget_cap: int,
     meal_time: str = "점심",
+    calc_walk_minutes: Optional[int] = None,
 ) -> float:
     """
     최종 점수 — 기획서 3.2 (식사 시간대 항목 추가)
@@ -152,7 +162,9 @@ def calc_total_score(
     """
     rating_score = (restaurant.rating / 5.0)
     review_score = calc_review_score(restaurant.review_count)
-    purpose_score = calc_purpose_fit(restaurant, purpose, party_size)
+    purpose_score = calc_purpose_fit(
+        restaurant, purpose, party_size, calc_walk_minutes=calc_walk_minutes
+    )
     price_score = calc_price_fit(restaurant, budget_cap)
     meal_time_score = calc_meal_time_fit(restaurant, meal_time)
 
@@ -193,14 +205,15 @@ def recommend(db: Session, req: RecommendRequest) -> dict:
     meal_time = req.meal_time.value  # "아침"/"점심"/"저녁"/"술자리"
 
     # 2) 필터링: 거리 + 예산 + 식사 시간대
-    filtered = []
+    # filtered: (restaurant, calc_walk_minutes) 튜플 목록
+    filtered: List[Tuple[Restaurant, int]] = []
     for r in restaurants:
-        # 거리 필터 (좌표 기반 or walk_minutes 기반)
+        # 거리 필터 (GPS 좌표 기반 Haversine 우선 → 없으면 DB 저장값)
         if req.lat and req.lng:
             dist = distance_meters(req.lat, req.lng, r.lat, r.lng)
-            walk_est = dist / settings.SPEED_WALK  # 도보 환산
+            walk_est = dist / settings.SPEED_WALK  # 도보 환산 (분)
         else:
-            walk_est = r.walk_minutes
+            walk_est = float(r.walk_minutes)
 
         if walk_est > (req.available_minutes - settings.MIN_MEAL_MINUTES) / 2:
             continue
@@ -218,25 +231,29 @@ def recommend(db: Session, req: RecommendRequest) -> dict:
         if not open_status["is_open"]:
             continue
 
-        filtered.append(r)
+        filtered.append((r, int(round(walk_est))))
 
     # 3) 점수 산출
-    scored = []
-    for r in filtered:
-        score = calc_total_score(r, req.purpose.value, req.party_size, budget_cap, meal_time)
-        scored.append((r, score))
+    # scored: (restaurant, score, calc_walk_minutes)
+    scored: List[Tuple[Restaurant, float, int]] = []
+    for r, calc_walk in filtered:
+        score = calc_total_score(
+            r, req.purpose.value, req.party_size, budget_cap,
+            meal_time, calc_walk_minutes=calc_walk,
+        )
+        scored.append((r, score, calc_walk))
 
     # 4) 정렬
     if req.sort == SortEnum.recommended:
         scored.sort(key=lambda x: x[1], reverse=True)
     elif req.sort == SortEnum.distance:
-        scored.sort(key=lambda x: x[0].walk_minutes)
+        scored.sort(key=lambda x: x[2])   # 계산된 도보 분 기준
     elif req.sort == SortEnum.price:
         scored.sort(key=lambda x: x[0].price)
 
     # 5) 직렬화
     results = []
-    for r, score in scored[:8]:
+    for r, score, calc_walk in scored[:8]:
         tags = json.loads(r.tags or "[]")
         open_status = get_open_status(r.schedule_json or "{}")
         results.append(RestaurantCardOut(
@@ -249,7 +266,7 @@ def recommend(db: Session, req: RecommendRequest) -> dict:
             crowd_level=r.crowd_level,
             rating=r.rating,
             review_count=r.review_count,
-            walk_minutes=r.walk_minutes,
+            walk_minutes=calc_walk,       # 동적 계산값 사용
             price=r.price,
             price_confidence=r.price_confidence,
             tags=tags,
