@@ -184,7 +184,12 @@ def _fetch_page(
             print("  ⚠️  Rate-limit 감지 → 1초 대기")
             time.sleep(1.0)
         else:
-            print(f"  HTTP {resp.status_code} at ({lat:.4f},{lng:.4f}) code={code}")
+            # 에러 본문도 출력 (최초 1회만)
+            try:
+                err_body = resp.json()
+            except Exception:
+                err_body = resp.text[:200]
+            print(f"  HTTP {resp.status_code} at ({lat:.4f},{lng:.4f}) code={code} | {err_body}")
     except Exception as exc:
         print(f"  요청 오류: {exc}")
     return None

@@ -7,6 +7,7 @@
   미설정 시 관리자 기능 비활성화.
 """
 import json
+import httpx
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Header
 from fastapi.responses import JSONResponse
 from app.config import get_settings
@@ -118,6 +119,40 @@ def db_stats(x_admin_key: str = Header(..., alias="X-Admin-Key")):
         }
     finally:
         db.close()
+
+
+@router.get("/test-kakao", summary="카카오 API 키 테스트")
+def test_kakao(x_admin_key: str = Header(..., alias="X-Admin-Key")):
+    """
+    카카오 로컬 API 키가 올바른지 테스트합니다.
+    광주 중심부 1개 좌표로 실제 API 호출 후 전체 응답을 반환합니다.
+    """
+    _verify_admin(x_admin_key)
+
+    if not settings.KAKAO_REST_API_KEY:
+        return {"error": "KAKAO_REST_API_KEY 미설정"}
+
+    url = "https://dapi.kakao.com/v2/local/search/category.json"
+    params = {
+        "category_group_code": "FD6",
+        "x": 126.9162,
+        "y": 35.1468,
+        "radius": 500,
+        "page": 1,
+        "size": 3,
+    }
+    headers = {"Authorization": f"KakaoAK {settings.KAKAO_REST_API_KEY}"}
+
+    try:
+        with httpx.Client(timeout=10.0) as client:
+            resp = client.get(url, params=params, headers=headers)
+        return {
+            "status_code": resp.status_code,
+            "kakao_key_used": settings.KAKAO_REST_API_KEY[:8] + "...",  # 앞 8자리만 표시
+            "response_body": resp.json() if resp.headers.get("content-type", "").startswith("application/json") else resp.text[:500],
+        }
+    except Exception as e:
+        return {"error": str(e)}
 
 
 @router.get("/backup/restaurants", summary="식당 데이터 JSON 백업")
