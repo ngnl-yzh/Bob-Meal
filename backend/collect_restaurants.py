@@ -120,15 +120,15 @@ _GRIDS: dict[str, dict] = {
     "gwangju": {
         "lat_range": (35.05, 35.25),
         "lng_range": (126.78, 127.02),
-        "step_km":  2.0,
-        "radius":   1000,    # 카카오 반경 (m)
+        "step_km":  0.8,     # 촘촘하게: 2.0 → 0.8
+        "radius":   500,     # 반경도 축소 (중복 최소화)
         "desc":     "광주광역시",
     },
     "jeonnam": {
         "lat_range": (34.20, 35.10),
         "lng_range": (126.20, 127.60),
-        "step_km":  5.0,
-        "radius":   2500,
+        "step_km":  2.0,     # 촘촘하게: 5.0 → 2.0
+        "radius":   1000,
         "desc":     "전라남도",
     },
 }
