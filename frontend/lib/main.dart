@@ -14,7 +14,7 @@ import 'theme.dart';
 
 // ─── Kakao Native App Key (카카오 개발자 콘솔에서 발급) ─────────
 // https://developers.kakao.com/console/app → 내 애플리케이션 → 앱 키 → 네이티브 앱 키
-const _kakaoNativeAppKey = 'YOUR_KAKAO_NATIVE_APP_KEY';
+const _kakaoNativeAppKey = '3a836e8e5af56598f2b946bdae6f1dca';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
