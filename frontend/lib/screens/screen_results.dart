@@ -5,6 +5,7 @@ import '../models/conditions.dart';
 import '../theme.dart';
 import '../widgets/restaurant_card.dart';
 import '../widgets/bottom_nav.dart';
+import '../widgets/weather_banner.dart';
 
 class ScreenResults extends StatefulWidget {
   final RecommendResponse response;
@@ -59,6 +60,12 @@ class _ScreenResultsState extends State<ScreenResults> {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 120),
               children: [
+                // 날씨 배너 (위치 정보 있을 때만 표시 / 출처: 기상청)
+                if (widget.conditions.lat != null && widget.conditions.lng != null)
+                  WeatherBanner(
+                    lat: widget.conditions.lat!,
+                    lng: widget.conditions.lng!,
+                  ),
                 ...visible.asMap().entries.map((e) => RestaurantCardWidget(
                       restaurant: e.value,
                       onTap: () => widget.onPick(e.value),

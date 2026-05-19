@@ -1,16 +1,27 @@
-// 앱 진입점 — 화면 전환 + 상태 관리
+// 앱 진입점 — 화면 전환 + 인증 상태 관리
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart';
 import 'models/conditions.dart';
 import 'models/restaurant.dart';
 import 'services/api_service.dart';
 import 'screens/screen_input.dart';
 import 'screens/screen_results.dart';
 import 'screens/screen_detail.dart';
+import 'screens/screen_login.dart';
+import 'screens/screen_register.dart';
 import 'theme.dart';
 
-void main() {
+// ─── Kakao Native App Key (카카오 개발자 콘솔에서 발급) ─────────
+// https://developers.kakao.com/console/app → 내 애플리케이션 → 앱 키 → 네이티브 앱 키
+const _kakaoNativeAppKey = 'YOUR_KAKAO_NATIVE_APP_KEY';
+
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // 카카오 SDK 초기화
+  KakaoSdk.init(nativeAppKey: _kakaoNativeAppKey);
+
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
@@ -33,8 +44,11 @@ class RestaurantApp extends StatelessWidget {
   }
 }
 
-// ─── 화면 열거형 ──────────────────────────────────────────────
-enum AppScreen { input, results, detail }
+// ─── 인증 상태 ────────────────────────────────────────────────
+enum _AuthState { checking, unauthenticated, authenticated }
+
+// ─── 메인 화면 ────────────────────────────────────────────────
+enum _AppScreen { input, results, detail }
 
 class AppRoot extends StatefulWidget {
   const AppRoot({super.key});
@@ -44,7 +58,12 @@ class AppRoot extends StatefulWidget {
 }
 
 class _AppRootState extends State<AppRoot> {
-  AppScreen _screen = AppScreen.input;
+  // ── 인증
+  _AuthState _authState = _AuthState.checking;
+  bool _showRegister = false;   // true → 회원가입 화면
+
+  // ── 메인 앱
+  _AppScreen _screen = _AppScreen.input;
   Conditions _conditions = const Conditions();
   RecommendResponse? _response;
   String? _selectedId;
@@ -52,14 +71,52 @@ class _AppRootState extends State<AppRoot> {
   String? _error;
   int _navIndex = 0;
 
-  // ─── 추천 요청 ─────────────────────────────────────────────
+  @override
+  void initState() {
+    super.initState();
+    _checkAuth();
+  }
+
+  Future<void> _checkAuth() async {
+    final loggedIn = await ApiService.instance.isLoggedIn();
+    if (mounted) {
+      setState(() {
+        _authState = loggedIn ? _AuthState.authenticated : _AuthState.unauthenticated;
+      });
+    }
+  }
+
+  void _onLoginSuccess() {
+    setState(() {
+      _authState = _AuthState.authenticated;
+      _showRegister = false;
+    });
+  }
+
+  void _onRegisterSuccess() {
+    // 회원가입 성공 후 곧바로 로그인 화면으로
+    setState(() => _showRegister = false);
+  }
+
+  Future<void> _onLogout() async {
+    await ApiService.instance.logout();
+    setState(() {
+      _authState = _AuthState.unauthenticated;
+      _showRegister = false;
+      _screen = _AppScreen.input;
+      _response = null;
+      _selectedId = null;
+    });
+  }
+
+  // ─── 추천 요청 ───────────────────────────────────────────────
   Future<void> _onSubmit() async {
     setState(() { _loading = true; _error = null; });
     try {
       final resp = await ApiService.instance.recommend(_conditions);
       setState(() {
         _response = resp;
-        _screen = AppScreen.results;
+        _screen = _AppScreen.results;
         _loading = false;
       });
     } catch (e) {
@@ -78,7 +135,7 @@ class _AppRootState extends State<AppRoot> {
     }
   }
 
-  // ─── 화면 전환 슬라이드 애니메이션 ───────────────────────────
+  // ─── 화면 슬라이드 트랜지션 ──────────────────────────────────
   Widget _buildTransition({
     required Widget child,
     required bool visible,
@@ -100,20 +157,73 @@ class _AppRootState extends State<AppRoot> {
 
   @override
   Widget build(BuildContext context) {
+    // ── 토큰 확인 중: 스플래시 ───────────────────────────────────
+    if (_authState == _AuthState.checking) {
+      return Scaffold(
+        backgroundColor: kBg,
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 64, height: 64,
+                decoration: BoxDecoration(
+                  color: kBrand,
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: const Center(
+                  child: Text('밥',
+                      style: TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                      )),
+                ),
+              ),
+              const SizedBox(height: 24),
+              const CircularProgressIndicator(color: kBrand, strokeWidth: 2),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // ── 미인증: 로그인 / 회원가입 ────────────────────────────────
+    if (_authState == _AuthState.unauthenticated) {
+      return AnimatedSwitcher(
+        duration: const Duration(milliseconds: 260),
+        child: _showRegister
+            ? ScreenRegister(
+                key: const ValueKey('register'),
+                onRegisterSuccess: _onRegisterSuccess,
+                onGoToLogin: () => setState(() => _showRegister = false),
+              )
+            : ScreenLogin(
+                key: const ValueKey('login'),
+                onLoginSuccess: _onLoginSuccess,
+                onGoToRegister: () => setState(() => _showRegister = true),
+              ),
+      );
+    }
+
+    // ── 인증 완료: 메인 앱 ────────────────────────────────────────
     return Stack(
       children: [
         // ① 조건 입력
         _buildTransition(
-          visible: _screen == AppScreen.input,
+          visible: _screen == _AppScreen.input,
           fromRight: false,
           child: IgnorePointer(
-            ignoring: _screen != AppScreen.input,
+            ignoring: _screen != _AppScreen.input,
             child: ScreenInput(
               conditions: _conditions,
               onChanged: (c) => setState(() => _conditions = c),
               onSubmit: _onSubmit,
               navIndex: _navIndex,
-              onNavTap: (i) => setState(() => _navIndex = i),
+              onNavTap: (i) {
+                setState(() => _navIndex = i);
+                if (i == 2) _onLogout(); // 마이페이지 탭 → 임시: 로그아웃
+              },
             ),
           ),
         ),
@@ -121,17 +231,17 @@ class _AppRootState extends State<AppRoot> {
         // ② 추천 결과
         if (_response != null)
           _buildTransition(
-            visible: _screen == AppScreen.results,
-            fromRight: _screen == AppScreen.input,
+            visible: _screen == _AppScreen.results,
+            fromRight: _screen == _AppScreen.input,
             child: IgnorePointer(
-              ignoring: _screen != AppScreen.results,
+              ignoring: _screen != _AppScreen.results,
               child: ScreenResults(
                 response: _response!,
                 conditions: _conditions,
-                onBack: () => setState(() => _screen = AppScreen.input),
+                onBack: () => setState(() => _screen = _AppScreen.input),
                 onPick: (r) => setState(() {
                   _selectedId = r.id;
-                  _screen = AppScreen.detail;
+                  _screen = _AppScreen.detail;
                 }),
                 navIndex: _navIndex,
                 onNavTap: (i) => setState(() => _navIndex = i),
@@ -142,20 +252,20 @@ class _AppRootState extends State<AppRoot> {
         // ③ 식당 상세
         if (_selectedId != null)
           _buildTransition(
-            visible: _screen == AppScreen.detail,
+            visible: _screen == _AppScreen.detail,
             fromRight: true,
             child: IgnorePointer(
-              ignoring: _screen != AppScreen.detail,
+              ignoring: _screen != _AppScreen.detail,
               child: ScreenDetail(
                 restaurantId: _selectedId!,
-                onBack: () => setState(() => _screen = AppScreen.results),
+                onBack: () => setState(() => _screen = _AppScreen.results),
                 navIndex: _navIndex,
                 onNavTap: (i) => setState(() => _navIndex = i),
               ),
             ),
           ),
 
-        // 로딩 오버레이
+        // ── 로딩 오버레이
         if (_loading)
           Container(
             color: Colors.black.withOpacity(0.3),

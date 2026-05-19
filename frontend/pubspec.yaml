@@ -31,6 +31,9 @@ dependencies:
   shared_preferences: ^2.3.3
   flutter_secure_storage: ^9.2.2
 
+  # 카카오 로그인 SDK
+  kakao_flutter_sdk_user: ^1.9.8
+
   # UI
   shimmer: ^3.0.0
   flutter_rating_bar: ^4.0.1

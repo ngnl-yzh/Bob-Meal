@@ -2,18 +2,19 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
+import json
+import httpx
 
 from app.database import get_db
 from app.models import User, VisitHistory, Favorite, Restaurant
 from app.schemas import (
-    UserRegisterIn, UserLoginIn, UserOut, TokenOut,
+    UserRegisterIn, UserLoginIn, KakaoLoginIn, UserOut, TokenOut,
     RestaurantCardOut,
 )
 from app.services.auth_service import (
     hash_password, verify_password,
     create_access_token, require_current_user,
 )
-import json
 
 router = APIRouter(prefix="/api/user", tags=["사용자"])
 
@@ -46,6 +47,71 @@ def login(body: UserLoginIn, db: Session = Depends(get_db)):
         user=UserOut(
             id=user.id, email=user.email,
             nickname=user.nickname, identity=user.identity,
+            is_active=user.is_active,
+        ),
+    )
+
+
+@router.post("/kakao-login", response_model=TokenOut, summary="카카오 소셜 로그인")
+def kakao_login(body: KakaoLoginIn, db: Session = Depends(get_db)):
+    """
+    Flutter 에서 받은 카카오 AccessToken 으로 사용자 정보를 조회하고
+    자체 JWT 를 발급합니다.
+    """
+    # ── 1. 카카오 사용자 정보 조회 ────────────────────────────────
+    try:
+        resp = httpx.get(
+            "https://kapi.kakao.com/v2/user/me",
+            headers={"Authorization": f"Bearer {body.kakao_access_token}"},
+            timeout=10.0,
+        )
+        resp.raise_for_status()
+    except httpx.HTTPStatusError:
+        raise HTTPException(status_code=401, detail="유효하지 않은 카카오 토큰입니다")
+    except Exception:
+        raise HTTPException(status_code=502, detail="카카오 서버에 연결할 수 없습니다")
+
+    data = resp.json()
+    kakao_id = str(data.get("id", ""))
+    kakao_account = data.get("kakao_account", {})
+    profile = kakao_account.get("profile", {})
+    email = kakao_account.get("email")          # 이메일 동의 항목 미동의 시 None
+    nickname = profile.get("nickname") or "카카오유저"
+
+    if not kakao_id:
+        raise HTTPException(status_code=400, detail="카카오 ID를 받아오지 못했습니다")
+
+    # ── 2. 기존 회원 조회 (kakao_id 우선, 이메일 차선) ────────────
+    user = db.query(User).filter(User.kakao_id == kakao_id).first()
+    if not user and email:
+        user = db.query(User).filter(User.email == email).first()
+        if user:
+            # 이메일 계정에 kakao_id 연동
+            user.kakao_id = kakao_id
+            db.commit()
+
+    # ── 3. 신규 가입 ─────────────────────────────────────────────
+    if not user:
+        user = User(
+            email=email,          # None 이면 null 저장 (unique constraint 허용)
+            hashed_password=None, # 소셜 로그인은 비밀번호 없음
+            kakao_id=kakao_id,
+            nickname=nickname,
+            identity="학생",
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+    # ── 4. JWT 발급 ──────────────────────────────────────────────
+    token = create_access_token({"sub": str(user.id)})
+    return TokenOut(
+        access_token=token,
+        user=UserOut(
+            id=user.id,
+            email=user.email or "",
+            nickname=user.nickname,
+            identity=user.identity,
             is_active=user.is_active,
         ),
     )

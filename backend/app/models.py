@@ -126,8 +126,9 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    email = Column(String, unique=True, index=True, nullable=False)
-    hashed_password = Column(String, nullable=False)
+    email = Column(String, unique=True, index=True, nullable=True)   # 카카오 가입 시 nullable
+    hashed_password = Column(String, nullable=True)                   # 소셜 로그인 시 null
+    kakao_id = Column(String, unique=True, index=True, nullable=True) # 카카오 고유 ID
     nickname = Column(String, default="")
     identity = Column(String, default="학생")   # 학생 / 직장인
     is_active = Column(Boolean, default=True)

@@ -218,6 +218,9 @@ class UserOut(BaseModel):
     class Config:
         from_attributes = True
 
+class KakaoLoginIn(BaseModel):
+    kakao_access_token: str
+
 class TokenOut(BaseModel):
     access_token: str
     token_type: str = "bearer"
@@ -230,3 +233,4 @@ class WeatherOut(BaseModel):
     temperature: float
     is_outdoor_ok: bool
     advice: str
+    source: str = "기상청"   # 저작자 표시 의무 (공공누리 1유형)

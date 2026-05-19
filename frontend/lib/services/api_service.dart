@@ -131,6 +131,25 @@ class ApiService {
     return data;
   }
 
+  Future<Map<String, dynamic>> loginWithKakao(String kakaoAccessToken) async {
+    final res = await http.post(
+      Uri.parse('$_baseUrl/api/user/kakao-login'),
+      headers: await _headers(),
+      body: jsonEncode({'kakao_access_token': kakaoAccessToken}),
+    );
+    _checkStatus(res);
+    final data = jsonDecode(utf8.decode(res.bodyBytes));
+    // JWT 저장
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('access_token', data['access_token']);
+    return data;
+  }
+
+  Future<bool> isLoggedIn() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.containsKey('access_token');
+  }
+
   Future<void> logout() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('access_token');
