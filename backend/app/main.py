@@ -30,20 +30,15 @@ app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
     description="""
-## 식사 장소 추천 플랫폼 API
+## 한끼로그 API
 
-대학생·직장인 맞춤형 식당 추천 서비스
+대학생·직장인 맞춤형 식사 장소 추천 서비스
 
 ### 핵심 기능
 - `POST /api/recommend` — 조건 기반 식당 추천 (신분·목적·인원·위치·이동수단·시간·예산)
 - `GET /api/restaurant/{id}` — 식당 상세 (메뉴·혼잡도·가격 신뢰도)
-- `GET /api/weather` — 현재 날씨 (이동수단 권고 연동 예정)
-- JWT 기반 회원가입/로그인
-
-### Phase 2 예정
-- 네이버 플레이스 가격 수집
-- 카카오 모빌리티 경로 API
-- 기상청 날씨 연동
+- `GET /api/weather` — 현재 날씨 / 기상청 초단기예보
+- JWT 기반 회원가입·로그인 / 카카오 소셜 로그인
     """,
     lifespan=lifespan,
 )
