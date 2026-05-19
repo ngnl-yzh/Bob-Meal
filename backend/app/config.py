@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     # ─── 앱 기본 ──────────────────────────────────────────────
     APP_NAME: str = "한끼루트 API"
     APP_VERSION: str = "1.0.0"
-    DEBUG: bool = True
+    DEBUG: bool = False   # Railway 환경변수로 개발 시에만 True
 
     # ─── 데이터베이스 ──────────────────────────────────────────
     # 로컬: sqlite:///./restaurant.db
@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "changeme-in-production-32chars!!"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7일
+
+    # ─── 관리자 API 키 ─────────────────────────────────────────
+    # Railway 환경변수에 설정. 미설정 시 admin 엔드포인트 비활성화.
+    ADMIN_SECRET_KEY: str = ""
 
     # ─── CORS ─────────────────────────────────────────────────
     # 운영: 실제 Flutter 앱 도메인 또는 "*" (개발용)

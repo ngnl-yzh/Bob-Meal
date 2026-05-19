@@ -1,7 +1,14 @@
 """
 관리자 엔드포인트 — 식당 수집 등 운영 작업
+
+보안:
+  모든 관리자 API는 X-Admin-Key 헤더 검증 필요.
+  Railway 환경변수 ADMIN_SECRET_KEY 에 임의 비밀값을 설정하세요.
+  미설정 시 관리자 기능 비활성화.
 """
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+import json
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Header
+from fastapi.responses import JSONResponse
 from app.config import get_settings
 
 router = APIRouter(prefix="/admin", tags=["관리자"])
@@ -9,6 +16,24 @@ settings = get_settings()
 
 # 수집 상태 추적 (메모리 내)
 _collect_status: dict = {"running": False, "last": None, "count": 0}
+
+
+# ─── 관리자 키 검증 ───────────────────────────────────────────────
+def _verify_admin(x_admin_key: str = Header(..., alias="X-Admin-Key")):
+    """
+    X-Admin-Key 헤더로 관리자 인증.
+    ADMIN_SECRET_KEY 환경변수가 설정돼 있어야 함.
+    """
+    if not settings.ADMIN_SECRET_KEY:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "관리자 기능이 비활성화돼 있습니다. "
+                "Railway 환경변수에 ADMIN_SECRET_KEY 를 설정하세요."
+            ),
+        )
+    if x_admin_key != settings.ADMIN_SECRET_KEY:
+        raise HTTPException(status_code=403, detail="관리자 키가 올바르지 않습니다.")
 
 
 def _run_collect(region: str, limit: int | None):
@@ -44,6 +69,7 @@ def start_collect(
     background_tasks: BackgroundTasks,
     region: str = "all",   # gwangju / jeonnam / all
     limit: int | None = None,
+    x_admin_key: str = Header(..., alias="X-Admin-Key"),
 ):
     """
     카카오 로컬 API로 식당 데이터를 수집합니다.
@@ -51,7 +77,11 @@ def start_collect(
 
     - **region**: gwangju / jeonnam / all (기본: all)
     - **limit**: 최대 수집 건수 (생략하면 무제한)
+
+    헤더: `X-Admin-Key: {ADMIN_SECRET_KEY 값}`
     """
+    _verify_admin(x_admin_key)
+
     if not settings.KAKAO_REST_API_KEY:
         raise HTTPException(
             status_code=500,
@@ -68,14 +98,16 @@ def start_collect(
 
 
 @router.get("/collect/status", summary="수집 상태 확인")
-def collect_status():
+def collect_status(x_admin_key: str = Header(..., alias="X-Admin-Key")):
     """현재 수집 진행 상태를 반환합니다."""
+    _verify_admin(x_admin_key)
     return _collect_status
 
 
 @router.get("/stats", summary="DB 통계")
-def db_stats():
+def db_stats(x_admin_key: str = Header(..., alias="X-Admin-Key")):
     """식당/유저 수 등 간단한 통계"""
+    _verify_admin(x_admin_key)
     from app.database import SessionLocal
     from app.models import Restaurant, User
     db = SessionLocal()
@@ -84,5 +116,58 @@ def db_stats():
             "restaurants": db.query(Restaurant).count(),
             "users": db.query(User).count(),
         }
+    finally:
+        db.close()
+
+
+@router.get("/backup/restaurants", summary="식당 데이터 JSON 백업")
+def backup_restaurants(
+    x_admin_key: str = Header(..., alias="X-Admin-Key"),
+    limit: int = 10000,
+):
+    """
+    식당 데이터를 JSON 형태로 내보냅니다. (데이터 보존용)
+    Railway 재배포 전 이 엔드포인트로 백업하세요.
+
+    헤더: `X-Admin-Key: {ADMIN_SECRET_KEY 값}`
+    """
+    _verify_admin(x_admin_key)
+    from app.database import SessionLocal
+    from app.models import Restaurant
+    db = SessionLocal()
+    try:
+        rows = db.query(Restaurant).limit(limit).all()
+        data = []
+        for r in rows:
+            data.append({
+                "id": r.id,
+                "name": r.name,
+                "category": r.category,
+                "address": r.address,
+                "lat": r.lat,
+                "lng": r.lng,
+                "phone": r.phone or "",
+                "hours": r.hours or "",
+                "open_hour": r.open_hour,
+                "close_hour": r.close_hour,
+                "has_alcohol": r.has_alcohol,
+                "meal_times": r.meal_times,
+                "rating": r.rating,
+                "review_count": r.review_count,
+                "price": r.price,
+                "price_confidence": r.price_confidence,
+                "crowd_level": r.crowd_level,
+                "tags": r.tags,
+                "features": r.features,
+                "schedule_json": r.schedule_json,
+                "hero_icon": r.hero_icon,
+                "hero_hue": r.hero_hue,
+                "photo_url": r.photo_url or "",
+                "naver_place_id": r.naver_place_id or "",
+            })
+        return JSONResponse(
+            content={"count": len(data), "restaurants": data},
+            headers={"Content-Disposition": "attachment; filename=restaurants_backup.json"},
+        )
     finally:
         db.close()

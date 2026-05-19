@@ -205,17 +205,25 @@ def recommend(db: Session, req: RecommendRequest) -> dict:
     meal_time = req.meal_time.value  # "아침"/"점심"/"저녁"/"술자리"
 
     # 2) 필터링: 거리 + 예산 + 식사 시간대
-    # filtered: (restaurant, calc_walk_minutes) 튜플 목록
-    filtered: List[Tuple[Restaurant, int]] = []
+    # filtered: (restaurant, travel_minutes, walk_minutes) 튜플 목록
+    # - travel_minutes : 선택한 이동수단 기준 (필터/정렬 기준)
+    # - walk_minutes   : 항상 도보 기준 (거리 감각 표시용)
+    speed = SPEED_MAP.get(req.transport.value, settings.SPEED_WALK)
+    max_one_way = (req.available_minutes - settings.MIN_MEAL_MINUTES) / 2
+
+    filtered: List[Tuple[Restaurant, int, int]] = []
     for r in restaurants:
         # 거리 필터 (GPS 좌표 기반 Haversine 우선 → 없으면 DB 저장값)
         if req.lat and req.lng:
             dist = distance_meters(req.lat, req.lng, r.lat, r.lng)
-            walk_est = dist / settings.SPEED_WALK  # 도보 환산 (분)
+            travel_est = dist / speed                     # 이동수단 기준 (분) — 필터용
+            walk_est   = dist / settings.SPEED_WALK       # 도보 환산 (분) — 표시용
         else:
-            walk_est = float(r.walk_minutes)
+            travel_est = float(r.walk_minutes)
+            walk_est   = float(r.walk_minutes)
 
-        if walk_est > (req.available_minutes - settings.MIN_MEAL_MINUTES) / 2:
+        # 이동수단 기준 거리 필터 (버그 수정: 이전에는 항상 도보로 계산)
+        if travel_est > max_one_way:
             continue
 
         # 예산 필터 (2000원 여유)
@@ -231,29 +239,29 @@ def recommend(db: Session, req: RecommendRequest) -> dict:
         if not open_status["is_open"]:
             continue
 
-        filtered.append((r, int(round(walk_est))))
+        filtered.append((r, int(round(travel_est)), int(round(walk_est))))
 
     # 3) 점수 산출
-    # scored: (restaurant, score, calc_walk_minutes)
-    scored: List[Tuple[Restaurant, float, int]] = []
-    for r, calc_walk in filtered:
+    # scored: (restaurant, score, travel_minutes, walk_minutes)
+    scored: List[Tuple[Restaurant, float, int, int]] = []
+    for r, travel_min, walk_min in filtered:
         score = calc_total_score(
             r, req.purpose.value, req.party_size, budget_cap,
-            meal_time, calc_walk_minutes=calc_walk,
+            meal_time, calc_walk_minutes=travel_min,  # 이동수단 기준으로 접근성 점수 계산
         )
-        scored.append((r, score, calc_walk))
+        scored.append((r, score, travel_min, walk_min))
 
     # 4) 정렬
     if req.sort == SortEnum.recommended:
         scored.sort(key=lambda x: x[1], reverse=True)
     elif req.sort == SortEnum.distance:
-        scored.sort(key=lambda x: x[2])   # 계산된 도보 분 기준
+        scored.sort(key=lambda x: x[2])   # 이동수단 기준 이동 시간순
     elif req.sort == SortEnum.price:
         scored.sort(key=lambda x: x[0].price)
 
     # 5) 직렬화
     results = []
-    for r, score, calc_walk in scored[:8]:
+    for r, score, travel_min, walk_min in scored[:8]:
         tags = json.loads(r.tags or "[]")
         open_status = get_open_status(r.schedule_json or "{}")
         results.append(RestaurantCardOut(
@@ -266,7 +274,7 @@ def recommend(db: Session, req: RecommendRequest) -> dict:
             crowd_level=r.crowd_level,
             rating=r.rating,
             review_count=r.review_count,
-            walk_minutes=calc_walk,       # 동적 계산값 사용
+            walk_minutes=walk_min,        # 도보 기준 분 (거리 감각 표시)
             price=r.price,
             price_confidence=r.price_confidence,
             tags=tags,

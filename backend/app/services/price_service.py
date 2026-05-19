@@ -7,7 +7,7 @@
 """
 import re
 import statistics
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from sqlalchemy.orm import Session
 
@@ -22,7 +22,7 @@ settings = get_settings()
 
 # ─── 신뢰도 감쇠 계수 — 기획서 4.2 ──────────────────────────────
 def apply_decay(confidence: float, collected_at: datetime) -> float:
-    days = (datetime.utcnow() - collected_at).days
+    days = (datetime.now(timezone.utc).replace(tzinfo=None) - collected_at).days
     if days <= 30:
         return confidence
     elif days <= 90:

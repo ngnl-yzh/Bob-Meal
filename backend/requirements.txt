@@ -2,6 +2,7 @@ fastapi==0.115.5
 tzdata==2024.2          # zoneinfo(Asia/Seoul) Windows 지원
 uvicorn[standard]==0.32.1
 sqlalchemy==2.0.36
+alembic==1.14.1         # DB 스키마 마이그레이션 (배포 시 데이터 보존 핵심)
 pydantic==2.10.3
 pydantic-settings==2.6.1
 pydantic[email]
