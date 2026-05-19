@@ -216,6 +216,7 @@ def collect(
     total_new = 0
     total_skip = 0
     commit_every = 50   # N개마다 커밋
+    seen_ids: set[str] = set()  # 커밋 전 중복 방지용 메모리 세트
 
     headers = {"Authorization": f"KakaoAK {settings.KAKAO_REST_API_KEY}"}
 
@@ -247,8 +248,8 @@ def collect(
 
                                 rest_id = f"kakao_{place_id}"
 
-                                # 중복 체크
-                                if db.query(Restaurant).filter(
+                                # 중복 체크 (메모리 세트 + DB)
+                                if rest_id in seen_ids or db.query(Restaurant).filter(
                                     Restaurant.id == rest_id
                                 ).first():
                                     total_skip += 1
@@ -316,12 +317,14 @@ def collect(
 
                                 if not dry_run:
                                     db.add(r)
+                                seen_ids.add(rest_id)
 
                                 total_new += 1
 
                                 # N개마다 중간 커밋 + 실시간 상태 업데이트
                                 if not dry_run and total_new % commit_every == 0:
                                     db.commit()
+                                    seen_ids.clear()  # 커밋 후 메모리 세트 초기화
                                     if progress_status is not None:
                                         progress_status["count"] = total_new
                                         progress_status["last"] = (
