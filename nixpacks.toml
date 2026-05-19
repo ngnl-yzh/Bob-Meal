@@ -1,9 +1,9 @@
 # Nixpacks 빌드 설정 — Python(FastAPI) 백엔드만 빌드
-# Flutter(frontend/)는 Railway 배포 대상이 아닙니다.
+# Nix 환경에서는 pip 대신 python3 -m pip 를 사용해야 합니다.
 providers = ["python"]
 
 [phases.install]
-cmds = ["pip install -r backend/requirements.txt"]
+cmds = ["python3 -m pip install -r backend/requirements.txt"]
 
 [start]
-cmd = "cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+cmd = "cd backend && python3 -m uvicorn app.main:app --host 0.0.0.0 --port $PORT"
