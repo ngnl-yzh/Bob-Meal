@@ -15,8 +15,32 @@ from app.config import get_settings
 router = APIRouter(prefix="/admin", tags=["관리자"])
 settings = get_settings()
 
-# 수집 상태 추적 (메모리 내)
+# 수집 상태 추적 (메모리 + DB 영속화)
 _collect_status: dict = {"running": False, "last": None, "count": 0}
+
+
+def _load_collect_status():
+    """서버 시작 시 DB에서 마지막 수집 상태 복원. 수집 중이었으면 '중단됨'으로 표시."""
+    global _collect_status
+    try:
+        from app.database import SessionLocal
+        from app.models import SystemSetting
+        import json
+        db = SessionLocal()
+        try:
+            row = db.query(SystemSetting).filter(SystemSetting.key == "last_collect").first()
+            if row:
+                saved = json.loads(row.value)
+                # 이전에 "수집 중"이었으면 중단된 것
+                last = saved.get("status", "")
+                if last.startswith("수집 중:"):
+                    last = f"⚠️ 중단됨: 배포/재시작으로 중단 (마지막 저장: {saved.get('count', 0):,}개)"
+                _collect_status["last"] = last
+                _collect_status["count"] = saved.get("count", 0)
+        finally:
+            db.close()
+    except Exception:
+        pass
 
 
 # ─── 관리자 키 검증 ───────────────────────────────────────────────
@@ -37,11 +61,33 @@ def _verify_admin(x_admin_key: str = Header(..., alias="X-Admin-Key")):
         raise HTTPException(status_code=403, detail="관리자 키가 올바르지 않습니다.")
 
 
+def _save_collect_status(status: str, count: int):
+    """수집 상태를 DB에 저장 (서버 재시작 후에도 유지)"""
+    try:
+        from app.database import SessionLocal
+        from app.models import SystemSetting
+        db = SessionLocal()
+        try:
+            import json
+            val = json.dumps({"status": status, "count": count}, ensure_ascii=False)
+            row = db.query(SystemSetting).filter(SystemSetting.key == "last_collect").first()
+            if row:
+                row.value = val
+            else:
+                db.add(SystemSetting(key="last_collect", value=val))
+            db.commit()
+        finally:
+            db.close()
+    except Exception:
+        pass  # DB 저장 실패해도 수집은 계속
+
+
 def _run_collect(region: str, limit: int | None):
     """백그라운드 수집 실행"""
     global _collect_status
     _collect_status["running"] = True
     _collect_status["count"] = 0
+    _collect_status["last"] = "수집 시작 중..."
     try:
         import sys, os
         # Railway: 실행 디렉토리가 backend/ 이므로 collect_restaurants.py 가 cwd에 있음
@@ -58,10 +104,13 @@ def _run_collect(region: str, limit: int | None):
         regions = ["gwangju", "jeonnam"] if region == "all" else [region]
         count = collect(regions, limit=limit, progress_status=_collect_status)
         _collect_status["count"] = count
-        _collect_status["last"] = f"완료: {count}개 수집"
+        _collect_status["last"] = f"✅ 완료: {count:,}개 수집"
+        _save_collect_status(f"✅ 완료: {count:,}개 수집", count)
     except Exception as e:
         import traceback
-        _collect_status["last"] = f"오류: {e} | {traceback.format_exc()[-300:]}"
+        msg = f"❌ 오류: {e} | {traceback.format_exc()[-300:]}"
+        _collect_status["last"] = msg
+        _save_collect_status(msg, _collect_status.get("count", 0))
     finally:
         _collect_status["running"] = False
 
@@ -101,8 +150,10 @@ def start_collect(
 
 @router.get("/collect/status", summary="수집 상태 확인")
 def collect_status(x_admin_key: str = Header(..., alias="X-Admin-Key")):
-    """현재 수집 진행 상태를 반환합니다."""
+    """현재 수집 진행 상태를 반환합니다. 서버 재시작 후에도 마지막 결과를 표시합니다."""
     _verify_admin(x_admin_key)
+    if not _collect_status["running"] and _collect_status["last"] is None:
+        _load_collect_status()
     return _collect_status
 
 

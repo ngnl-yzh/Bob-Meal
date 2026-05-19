@@ -186,3 +186,12 @@ class CrowdReport(Base):
     level = Column(SAEnum(CrowdLevel), nullable=False)
     reported_at = Column(DateTime(timezone=True), server_default=func.now())
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+
+
+class SystemSetting(Base):
+    """시스템 설정 키-값 저장소 (수집 상태 등 서버 재시작 후에도 유지)"""
+    __tablename__ = "system_settings"
+
+    key = Column(String, primary_key=True)
+    value = Column(Text, nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
