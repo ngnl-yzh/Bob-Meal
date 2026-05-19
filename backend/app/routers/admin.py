@@ -17,8 +17,15 @@ def _run_collect(region: str, limit: int | None):
     _collect_status["running"] = True
     try:
         import sys, os
-        # collect_restaurants.py 가 backend/ 루트에 있음
-        sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        # Railway: 실행 디렉토리가 backend/ 이므로 collect_restaurants.py 가 cwd에 있음
+        backend_dir = os.getcwd()  # uvicorn 실행 위치 = backend/
+        if backend_dir not in sys.path:
+            sys.path.insert(0, backend_dir)
+
+        # 혹시 모듈 캐시에 남아있으면 제거 후 재임포트
+        if "collect_restaurants" in sys.modules:
+            del sys.modules["collect_restaurants"]
+
         from collect_restaurants import collect
 
         regions = ["gwangju", "jeonnam"] if region == "all" else [region]
@@ -26,7 +33,8 @@ def _run_collect(region: str, limit: int | None):
         _collect_status["count"] = count
         _collect_status["last"] = f"완료: {count}개 수집"
     except Exception as e:
-        _collect_status["last"] = f"오류: {e}"
+        import traceback
+        _collect_status["last"] = f"오류: {e} | {traceback.format_exc()[-300:]}"
     finally:
         _collect_status["running"] = False
 
