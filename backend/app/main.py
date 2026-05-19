@@ -7,7 +7,7 @@ from app.config import get_settings
 from app.database import engine, SessionLocal, Base
 from app.models import *   # noqa: F401 — 모든 모델 import (테이블 생성용)
 from app.mock_data import seed_database
-from app.routers import recommend, restaurants, users, weather
+from app.routers import recommend, restaurants, users, weather, admin
 
 settings = get_settings()
 
@@ -58,6 +58,7 @@ app.include_router(recommend.router)
 app.include_router(restaurants.router)
 app.include_router(users.router)
 app.include_router(weather.router)
+app.include_router(admin.router)
 
 
 @app.get("/", tags=["헬스체크"])
