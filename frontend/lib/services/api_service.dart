@@ -4,10 +4,11 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/restaurant.dart';
 import '../models/conditions.dart';
+import '../config.dart';
 
 class ApiService {
-  // 개발: localhost / 운영: Railway URL 로 교체
-  static const String _baseUrl = 'http://127.0.0.1:8000';
+  // debug 빌드 → localhost, release 빌드 → Railway URL (config.dart 에서 관리)
+  static String get _baseUrl => AppConfig.baseUrl;
 
   static ApiService? _instance;
   ApiService._();

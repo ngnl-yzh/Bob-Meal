@@ -14,6 +14,8 @@ engine = create_engine(
     settings.DATABASE_URL,
     connect_args=connect_args,
     echo=settings.DEBUG,
+    # PostgreSQL pool 설정 (SQLite는 무시됨)
+    pool_pre_ping=True,
 )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

@@ -49,9 +49,10 @@ app = FastAPI(
 )
 
 # CORS — Flutter 앱 및 개발 환경 허용
+# 운영 환경에서는 .env 의 ALLOWED_ORIGINS 에 Railway URL 추가
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 운영 환경에서는 실제 도메인으로 제한
+    allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
