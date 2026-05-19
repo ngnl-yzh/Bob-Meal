@@ -1,0 +1,2 @@
+# Railway 빌드용 — 실제 의존성은 backend/requirements.txt 에 있습니다.
+-r backend/requirements.txt
