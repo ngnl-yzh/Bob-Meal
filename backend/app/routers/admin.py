@@ -157,6 +157,22 @@ def collect_status(x_admin_key: str = Header(..., alias="X-Admin-Key")):
     return _collect_status
 
 
+@router.delete("/restaurants/all", summary="식당 데이터 전체 삭제 (재수집용)")
+def delete_all_restaurants(x_admin_key: str = Header(..., alias="X-Admin-Key")):
+    """식당 데이터를 전부 삭제합니다. 재수집 전 초기화 용도."""
+    _verify_admin(x_admin_key)
+    from app.database import SessionLocal
+    from app.models import Restaurant
+    db = SessionLocal()
+    try:
+        count = db.query(Restaurant).count()
+        db.query(Restaurant).delete()
+        db.commit()
+        return {"deleted": count, "message": f"{count:,}개 삭제 완료. 이제 /admin/collect 로 재수집하세요."}
+    finally:
+        db.close()
+
+
 @router.get("/stats", summary="DB 통계")
 def db_stats(x_admin_key: str = Header(..., alias="X-Admin-Key")):
     """식당/유저 수 등 간단한 통계"""
