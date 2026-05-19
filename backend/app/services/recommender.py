@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.models import Restaurant
 from app.schemas import RecommendRequest, RestaurantCardOut, SortEnum
+from app.services.open_hours_service import get_open_status
 
 settings = get_settings()
 
@@ -212,6 +213,11 @@ def recommend(db: Session, req: RecommendRequest) -> dict:
         if meal_time == "술자리" and not r.has_alcohol:
             continue
 
+        # KST 영업 중 필터 — 현재 닫힌 식당 제외
+        open_status = get_open_status(r.schedule_json or "{}")
+        if not open_status["is_open"]:
+            continue
+
         filtered.append(r)
 
     # 3) 점수 산출
@@ -232,10 +238,14 @@ def recommend(db: Session, req: RecommendRequest) -> dict:
     results = []
     for r, score in scored[:8]:
         tags = json.loads(r.tags or "[]")
+        open_status = get_open_status(r.schedule_json or "{}")
         results.append(RestaurantCardOut(
             id=r.id,
             name=r.name,
             category=r.category,
+            is_open=open_status["is_open"],
+            today_hours=open_status["today_hours"],
+            closes_soon=open_status["closes_soon"],
             crowd_level=r.crowd_level,
             rating=r.rating,
             review_count=r.review_count,

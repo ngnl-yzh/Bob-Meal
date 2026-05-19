@@ -8,6 +8,7 @@ import math
 import datetime
 from fastapi import APIRouter, Query
 import httpx
+from app.services.open_hours_service import now_kst
 
 from app.config import get_settings
 from app.schemas import WeatherOut
@@ -57,12 +58,12 @@ def _lat_lng_to_grid(lat: float, lng: float) -> tuple[int, int]:
 # ─── 초단기예보 base_date / base_time 계산 ───────────────────────
 def _get_base_datetime() -> tuple[str, str]:
     """
-    초단기예보는 매시 30분 이후 이용 가능.
+    초단기예보는 매시 30분 이후 이용 가능 (KST 기준).
     현재 분 < 30이면 1시간 전 발표 사용.
     """
-    now = datetime.datetime.now()
+    now = now_kst()  # KST 명시
     if now.minute < 30:
-        now -= datetime.timedelta(hours=1)
+        now = now - datetime.timedelta(hours=1)
     return now.strftime("%Y%m%d"), now.strftime("%H00")
 
 

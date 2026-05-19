@@ -115,6 +115,9 @@ class RestaurantCardOut(BaseModel):
     id: str
     name: str
     category: str
+    is_open: bool = True            # KST 기준 실시간 영업 여부
+    today_hours: str = ""           # "11:00 ~ 21:00" or "오늘 휴무"
+    closes_soon: bool = False       # 1시간 이내 마감
     crowd_level: CrowdLevelEnum
     rating: float
     review_count: int
@@ -139,8 +142,12 @@ class RestaurantDetailOut(BaseModel):
     address: str
     lat: float
     lng: float
-    hours: str
+    hours: str                      # 한 줄 요약 (예: "월~금 11:00~21:00 · 일 휴무")
     is_open: bool
+    today_hours: str = ""           # 오늘 영업시간 ("11:00 ~ 21:00" or "오늘 휴무")
+    closes_soon: bool = False
+    break_now: bool = False         # 현재 브레이크타임 여부
+    hours_note: str = ""            # "매주 일요일 정기휴무" 등
     phone: Optional[str]
     rating: float
     review_count: int
@@ -156,6 +163,7 @@ class RestaurantDetailOut(BaseModel):
     menus: List[MenuOut]
     crowd_by_hour: List[CrowdByHourOut]
     price_info: Optional[PriceInfoOut] = None
+    naver_place_id: str = ""
 
     class Config:
         from_attributes = True

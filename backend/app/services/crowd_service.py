@@ -3,12 +3,13 @@
 1단계: 통계 기반 예측 (Google Popular Times mock)
 2단계: 사용자 신고
 """
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Optional
 from sqlalchemy.orm import Session
 
 from app.models import Restaurant, CrowdReport, CrowdByHour
 from app.schemas import CrowdLevelEnum, CrowdReportIn
+from app.services.open_hours_service import now_kst
 
 
 # ─── 혼잡도 비율 → 레벨 변환 ──────────────────────────────────
@@ -27,13 +28,16 @@ def get_current_crowd(db: Session, restaurant: Restaurant) -> dict:
     현재 시각 기준 혼잡도 반환
     우선순위: 최근 30분 사용자 신고 → 시간대 통계
     """
-    # 1) 최근 30분 사용자 신고 확인
-    cutoff = datetime.utcnow() - timedelta(minutes=30)
+    # 1) 최근 30분 사용자 신고 확인 (KST 기준)
+    now = now_kst()
+    cutoff = now - timedelta(minutes=30)
+    # DB에 저장된 시간은 UTC이므로 naive datetime으로 비교
+    cutoff_naive = cutoff.replace(tzinfo=None)
     recent_reports = (
         db.query(CrowdReport)
         .filter(
             CrowdReport.restaurant_id == restaurant.id,
-            CrowdReport.reported_at >= cutoff,
+            CrowdReport.reported_at >= cutoff_naive,
         )
         .all()
     )
@@ -41,7 +45,7 @@ def get_current_crowd(db: Session, restaurant: Restaurant) -> dict:
     if recent_reports:
         # 최신 신고를 우선
         latest = max(recent_reports, key=lambda r: r.reported_at)
-        delta = datetime.utcnow() - latest.reported_at
+        delta = now.replace(tzinfo=None) - latest.reported_at
         minutes_ago = int(delta.total_seconds() / 60)
         return {
             "level": latest.level,
@@ -50,8 +54,8 @@ def get_current_crowd(db: Session, restaurant: Restaurant) -> dict:
             "is_accurate": True,
         }
 
-    # 2) 통계 기반: 현재 시각에 가장 가까운 crowd_by_hour 항목
-    now_hour = datetime.now().hour
+    # 2) 통계 기반: 현재 시각(KST)에 가장 가까운 crowd_by_hour 항목
+    now_hour = now_kst().hour
     crowd_rows = (
         db.query(CrowdByHour)
         .filter(CrowdByHour.restaurant_id == restaurant.id)

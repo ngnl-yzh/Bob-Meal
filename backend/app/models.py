@@ -59,6 +59,11 @@ class Restaurant(Base):
     tags = Column(Text, default="[]")        # ["혼밥 가능", "주차 가능"]
     features = Column(Text, default="[]")    # 상세 특징
 
+    # 요일별 영업시간 JSON — 기획서 추가
+    # 형식: {"mon":"11:00-21:00","tue":"11:00-21:00",...,"sun":null,"break":"15:00-17:00","note":"..."}
+    schedule_json = Column(Text, default="{}")
+    naver_place_id = Column(String, default="")  # 네이버 플레이스 ID (자동 수집)
+
     # 사진
     photo_url = Column(String, default="")
     hero_icon = Column(String, default="stew")  # stew/katsu/kimbap/noodle/rice-bowl/meat

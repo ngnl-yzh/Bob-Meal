@@ -110,28 +110,38 @@ class RestaurantCardWidget extends StatelessWidget {
                       Expanded(
                         child: Text(
                           r.name,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontFamily: 'Pretendard',
                             fontSize: 15.5,
                             fontWeight: FontWeight.w700,
-                            color: kInk,
+                            color: r.isOpen ? kInk : kInk3,
                             letterSpacing: -0.4,
                           ),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      Text(
-                        r.category,
-                        style: const TextStyle(
-                          fontFamily: 'Pretendard',
-                          fontSize: 11.5,
-                          color: kInk3,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
+                      const SizedBox(width: 6),
+                      // ─── 영업 상태 배지 ──────────────────────────
+                      OpenStatusBadge(isOpen: r.isOpen, closesSoon: r.closesSoon),
                     ],
                   ),
+                  // 오늘 영업시간
+                  if (r.todayHours.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      r.isOpen
+                          ? (r.closesSoon ? '⚠ 곧 마감 · ${r.todayHours}' : r.todayHours)
+                          : r.todayHours,
+                      style: TextStyle(
+                        fontFamily: 'Pretendard',
+                        fontSize: 11,
+                        color: r.isOpen
+                            ? (r.closesSoon ? const Color(0xFFF59E0B) : kInk3)
+                            : const Color(0xFFEF4444),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 4),
 
                   // 별점 · 거리 · 가격 · 혼잡도
@@ -236,5 +246,55 @@ class RestaurantCardWidget extends StatelessWidget {
           RegExp(r'\B(?=(\d{3})+(?!\d))'), (m) => ',');
     }
     return '$price';
+  }
+}
+
+// ─── 영업 상태 배지 (독립 위젯) ───────────────────────────────
+class OpenStatusBadge extends StatelessWidget {
+  final bool isOpen;
+  final bool closesSoon;
+  const OpenStatusBadge({
+    super.key,
+    required this.isOpen,
+    required this.closesSoon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final Color bg;
+    final Color fg;
+    final String label;
+
+    if (!isOpen) {
+      bg = const Color(0xFFF3F4F6);
+      fg = const Color(0xFF9CA3AF);
+      label = '영업종료';
+    } else if (closesSoon) {
+      bg = const Color(0xFFFEF3C7);
+      fg = const Color(0xFFD97706);
+      label = '곧마감';
+    } else {
+      bg = const Color(0xFFD1FAE5);
+      fg = const Color(0xFF059669);
+      label = '영업중';
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(5),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontFamily: 'Pretendard',
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+          color: fg,
+          letterSpacing: -0.2,
+        ),
+      ),
+    );
   }
 }

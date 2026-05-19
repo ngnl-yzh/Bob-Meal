@@ -28,6 +28,11 @@ MOCK_RESTAURANTS = [
         "open_hour": 8, "close_hour": 21,
         "has_alcohol": False,
         "meal_times": ["아침", "점심", "저녁"],
+        "schedule": {
+            "mon": "08:00-21:00", "tue": "08:00-21:00", "wed": "08:00-21:00",
+            "thu": "08:00-21:00", "fri": "08:00-21:00", "sat": "08:00-21:00",
+            "sun": None, "break": None, "note": "매주 일요일 정기휴무",
+        },
         "tags": ["혼밥 가능", "주차 가능"],
         "features": ["혼밥 가능", "주차 가능", "포장 가능", "단체석"],
         "photo_url": "https://images.unsplash.com/photo-1583224944844-5b268c057b72?w=900&q=80",
@@ -67,6 +72,11 @@ MOCK_RESTAURANTS = [
         "open_hour": 11, "close_hour": 22,
         "has_alcohol": False,
         "meal_times": ["점심", "저녁"],
+        "schedule": {
+            "mon": None, "tue": "11:00-22:00", "wed": "11:00-22:00",
+            "thu": "11:00-22:00", "fri": "11:00-22:00", "sat": "11:00-22:00",
+            "sun": "11:00-20:00", "break": "15:00-17:00", "note": "매주 월요일 정기휴무",
+        },
         "tags": ["혼밥 가능"],
         "features": ["혼밥 가능", "카드 가능", "포장 가능"],
         "photo_url": "https://images.unsplash.com/photo-1632778149955-e80f8ceca2e8?w=900&q=80",
@@ -106,6 +116,11 @@ MOCK_RESTAURANTS = [
         "open_hour": 7, "close_hour": 23,
         "has_alcohol": False,
         "meal_times": ["아침", "점심", "저녁"],
+        "schedule": {
+            "mon": "07:00-23:00", "tue": "07:00-23:00", "wed": "07:00-23:00",
+            "thu": "07:00-23:00", "fri": "07:00-23:00", "sat": "07:00-23:00",
+            "sun": "07:00-23:00", "break": None, "note": "연중무휴",
+        },
         "tags": ["혼밥 가능", "포장 가능"],
         "features": ["혼밥 가능", "포장 가능", "24시간 가까움"],
         "photo_url": "https://images.unsplash.com/photo-1635363638580-c2809d049eee?w=900&q=80",
@@ -145,6 +160,11 @@ MOCK_RESTAURANTS = [
         "open_hour": 11, "close_hour": 21,
         "has_alcohol": False,
         "meal_times": ["점심", "저녁"],
+        "schedule": {
+            "mon": "11:00-21:30", "tue": None, "wed": "11:00-21:30",
+            "thu": "11:00-21:30", "fri": "11:00-21:30", "sat": "11:00-21:30",
+            "sun": "11:00-21:30", "break": "15:00-16:30", "note": "매주 화요일 정기휴무",
+        },
         "tags": ["혼밥 가능"],
         "features": ["혼밥 가능", "주차 가능", "포장 가능"],
         "photo_url": "https://images.unsplash.com/photo-1582106245687-cbb466a9f07f?w=900&q=80",
@@ -184,6 +204,11 @@ MOCK_RESTAURANTS = [
         "open_hour": 11, "close_hour": 22,
         "has_alcohol": True,
         "meal_times": ["점심", "저녁", "술자리"],
+        "schedule": {
+            "mon": None, "tue": "11:00-22:00", "wed": "11:00-22:00",
+            "thu": "11:00-22:00", "fri": "11:00-23:00", "sat": "11:00-23:00",
+            "sun": "11:00-21:00", "break": "14:30-17:00", "note": "매주 월요일 정기휴무",
+        },
         "tags": ["혼밥 가능", "배달 가능", "주류 가능"],
         "features": ["혼밥 가능", "배달 가능", "포장 가능", "주류 가능"],
         "photo_url": "https://images.unsplash.com/photo-1585032226651-759b368d7246?w=900&q=80",
@@ -223,6 +248,11 @@ MOCK_RESTAURANTS = [
         "open_hour": 7, "close_hour": 21,
         "has_alcohol": False,
         "meal_times": ["아침", "점심", "저녁"],
+        "schedule": {
+            "mon": "07:30-21:00", "tue": "07:30-21:00", "wed": "07:30-21:00",
+            "thu": "07:30-21:00", "fri": "07:30-21:00", "sat": "08:00-20:00",
+            "sun": None, "break": None, "note": "매주 일요일 정기휴무",
+        },
         "tags": ["혼밥 가능", "포장 가능"],
         "features": ["혼밥 가능", "포장 가능"],
         "photo_url": "https://images.unsplash.com/photo-1623341214825-9f4f963727da?w=900&q=80",
@@ -262,6 +292,11 @@ MOCK_RESTAURANTS = [
         "open_hour": 6, "close_hour": 22,
         "has_alcohol": False,
         "meal_times": ["아침", "점심", "저녁"],
+        "schedule": {
+            "mon": "06:00-22:00", "tue": "06:00-22:00", "wed": "06:00-22:00",
+            "thu": "06:00-22:00", "fri": "06:00-22:00", "sat": "06:00-22:00",
+            "sun": "06:00-22:00", "break": None, "note": "연중무휴",
+        },
         "tags": ["혼밥 가능", "주차 가능"],
         "features": ["혼밥 가능", "주차 가능", "단체석"],
         "photo_url": "https://images.unsplash.com/photo-1582271637859-d1b8c3593f0e?w=900&q=80",
@@ -301,6 +336,11 @@ MOCK_RESTAURANTS = [
         "open_hour": 11, "close_hour": 21,
         "has_alcohol": False,
         "meal_times": ["점심", "저녁"],
+        "schedule": {
+            "mon": "11:00-21:00", "tue": "11:00-21:00", "wed": "11:00-21:00",
+            "thu": "11:00-21:00", "fri": "11:00-21:00", "sat": "11:00-20:00",
+            "sun": None, "break": "15:00-16:30", "note": "매주 일요일 정기휴무",
+        },
         "tags": ["혼밥 가능", "포장 가능"],
         "features": ["혼밥 가능", "포장 가능", "주차 가능"],
         "photo_url": "https://images.unsplash.com/photo-1567337710282-00832b415979?w=900&q=80",
@@ -337,11 +377,13 @@ def seed_database(db):
         menus = data.pop("menus")
         crowd = data.pop("crowd_by_hour")
 
-        # 리스트를 JSON 문자열로 변환
+        # 리스트/딕트를 JSON 문자열로 변환
         data["tags"] = json.dumps(data["tags"], ensure_ascii=False)
         data["features"] = json.dumps(data["features"], ensure_ascii=False)
         if "meal_times" in data:
             data["meal_times"] = json.dumps(data["meal_times"], ensure_ascii=False)
+        if "schedule" in data:
+            data["schedule_json"] = json.dumps(data.pop("schedule"), ensure_ascii=False)
 
         restaurant = Restaurant(**data)
         db.add(restaurant)

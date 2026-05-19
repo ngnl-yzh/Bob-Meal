@@ -1,7 +1,6 @@
 """식당 상세 / 리뷰 / 가격 / 혼잡도 신고"""
 import json
-from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session
 from typing import List, Optional
 
@@ -14,6 +13,10 @@ from app.schemas import (
 from app.services.price_service import get_price_info
 from app.services.crowd_service import get_current_crowd, submit_crowd_report
 from app.services.auth_service import get_current_user
+from app.services.open_hours_service import (
+    get_open_status, build_hours_display,
+    search_naver_place_id, fetch_naver_place_schedule,
+)
 from app.models import User
 
 router = APIRouter(prefix="/api/restaurant", tags=["식당"])
@@ -26,9 +29,65 @@ def _get_or_404(db: Session, restaurant_id: str) -> Restaurant:
     return r
 
 
+# ─── 네이버 플레이스 영업시간 백그라운드 수집 ───────────────────
+def _sync_naver_hours(db: Session, restaurant: Restaurant):
+    """
+    네이버 플레이스에서 영업시간을 가져와 DB 업데이트 (백그라운드 실행).
+    naver_place_id 없으면 검색 먼저 수행.
+    """
+    place_id = restaurant.naver_place_id or ""
+
+    # 플레이스 ID 없으면 검색
+    if not place_id:
+        place_id = search_naver_place_id(restaurant.name, restaurant.address) or ""
+        if place_id:
+            try:
+                db.query(Restaurant).filter(Restaurant.id == restaurant.id).update(
+                    {"naver_place_id": place_id}
+                )
+                db.commit()
+            except Exception:
+                db.rollback()
+
+    if not place_id:
+        return
+
+    # 영업시간 파싱
+    schedule = fetch_naver_place_schedule(place_id)
+    if not schedule:
+        return
+
+    schedule_json_str = json.dumps(schedule, ensure_ascii=False)
+    hours_display = build_hours_display(schedule_json_str)
+
+    try:
+        db.query(Restaurant).filter(Restaurant.id == restaurant.id).update(
+            {
+                "schedule_json": schedule_json_str,
+                "hours": hours_display or restaurant.hours,
+            }
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+
+
+# ─── 상세 조회 ────────────────────────────────────────────────
 @router.get("/{restaurant_id}", response_model=RestaurantDetailOut, summary="식당 상세")
-def get_restaurant_detail(restaurant_id: str, db: Session = Depends(get_db)):
+def get_restaurant_detail(
+    restaurant_id: str,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
     r = _get_or_404(db, restaurant_id)
+
+    # KST 기준 실시간 영업 상태
+    open_status = get_open_status(r.schedule_json or "{}")
+    # hours 표시 문자열 — DB에 없으면 schedule_json으로 생성
+    hours_display = r.hours or build_hours_display(r.schedule_json or "{}")
+
+    # 백그라운드: 네이버 플레이스 영업시간 최신화 (키 있을 때만)
+    background_tasks.add_task(_sync_naver_hours, db, r)
 
     menus = [
         MenuOut(
@@ -39,15 +98,14 @@ def get_restaurant_detail(restaurant_id: str, db: Session = Depends(get_db)):
     ]
 
     crowd_rows = sorted(r.crowd_by_hour, key=lambda c: c.id)
-    now_hour = datetime.now().hour
-    crowd_out = []
-    for row in crowd_rows:
-        is_now = row.hour_label == "지금"
-        crowd_out.append(CrowdByHourOut(
+    crowd_out = [
+        CrowdByHourOut(
             hour_label=row.hour_label,
             crowd_ratio=row.crowd_ratio,
-            is_now=is_now,
-        ))
+            is_now=(row.hour_label == "지금"),
+        )
+        for row in crowd_rows
+    ]
 
     price_info = get_price_info(db, r)
 
@@ -58,8 +116,12 @@ def get_restaurant_detail(restaurant_id: str, db: Session = Depends(get_db)):
         address=r.address,
         lat=r.lat,
         lng=r.lng,
-        hours=r.hours or "",
-        is_open=r.is_open,
+        hours=hours_display,
+        is_open=open_status["is_open"],
+        today_hours=open_status["today_hours"],
+        closes_soon=open_status["closes_soon"],
+        break_now=open_status["break_now"],
+        hours_note=open_status["note"],
         phone=r.phone,
         rating=r.rating,
         review_count=r.review_count,
@@ -75,6 +137,7 @@ def get_restaurant_detail(restaurant_id: str, db: Session = Depends(get_db)):
         menus=menus,
         crowd_by_hour=crowd_out,
         price_info=price_info,
+        naver_place_id=r.naver_place_id or "",
     )
 
 

@@ -73,6 +73,9 @@ class RestaurantCard {
   final String id;
   final String name;
   final String category;
+  final bool isOpen;          // KST 실시간 영업 여부
+  final String todayHours;    // "11:00 ~ 21:00" or "오늘 휴무"
+  final bool closesSoon;      // 1시간 이내 마감
   final String crowdLevel;
   final double rating;
   final int reviewCount;
@@ -89,6 +92,9 @@ class RestaurantCard {
     required this.id,
     required this.name,
     required this.category,
+    this.isOpen = true,
+    this.todayHours = '',
+    this.closesSoon = false,
     required this.crowdLevel,
     required this.rating,
     required this.reviewCount,
@@ -106,6 +112,9 @@ class RestaurantCard {
         id: j['id'] ?? '',
         name: j['name'] ?? '',
         category: j['category'] ?? '',
+        isOpen: j['is_open'] ?? true,
+        todayHours: j['today_hours'] ?? '',
+        closesSoon: j['closes_soon'] ?? false,
         crowdLevel: j['crowd_level'] ?? '보통',
         rating: (j['rating'] ?? 0.0).toDouble(),
         reviewCount: j['review_count'] ?? 0,
@@ -128,8 +137,12 @@ class RestaurantDetail {
   final String address;
   final double lat;
   final double lng;
-  final String hours;
-  final bool isOpen;
+  final String hours;         // 주간 요약 "월~금 11:00~21:00 · 일 휴무"
+  final bool isOpen;          // KST 실시간 영업 여부
+  final String todayHours;    // 오늘 영업시간 문자열
+  final bool closesSoon;
+  final bool breakNow;        // 브레이크타임 여부
+  final String hoursNote;     // "매주 일요일 정기휴무"
   final String? phone;
   final double rating;
   final int reviewCount;
@@ -145,6 +158,7 @@ class RestaurantDetail {
   final List<Menu> menus;
   final List<CrowdByHour> crowdByHour;
   final PriceInfo? priceInfo;
+  final String naverPlaceId;
 
   const RestaurantDetail({
     required this.id,
@@ -155,6 +169,10 @@ class RestaurantDetail {
     required this.lng,
     required this.hours,
     required this.isOpen,
+    this.todayHours = '',
+    this.closesSoon = false,
+    this.breakNow = false,
+    this.hoursNote = '',
     this.phone,
     required this.rating,
     required this.reviewCount,
@@ -170,6 +188,7 @@ class RestaurantDetail {
     required this.menus,
     required this.crowdByHour,
     this.priceInfo,
+    this.naverPlaceId = '',
   });
 
   factory RestaurantDetail.fromJson(Map<String, dynamic> j) => RestaurantDetail(
@@ -181,6 +200,10 @@ class RestaurantDetail {
         lng: (j['lng'] ?? 0.0).toDouble(),
         hours: j['hours'] ?? '',
         isOpen: j['is_open'] ?? true,
+        todayHours: j['today_hours'] ?? '',
+        closesSoon: j['closes_soon'] ?? false,
+        breakNow: j['break_now'] ?? false,
+        hoursNote: j['hours_note'] ?? '',
         phone: j['phone'],
         rating: (j['rating'] ?? 0.0).toDouble(),
         reviewCount: j['review_count'] ?? 0,
@@ -198,6 +221,7 @@ class RestaurantDetail {
             .map((c) => CrowdByHour.fromJson(c))
             .toList(),
         priceInfo: j['price_info'] != null ? PriceInfo.fromJson(j['price_info']) : null,
+        naverPlaceId: j['naver_place_id'] ?? '',
       );
 }
 
