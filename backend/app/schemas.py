@@ -62,6 +62,7 @@ class RecommendRequest(BaseModel):
     price_mode: PriceModeEnum = PriceModeEnum.default
     price_max: Optional[int] = None   # custom 시 사용
     sort: SortEnum = SortEnum.recommended
+    target_datetime: Optional[str] = None  # "YYYY-MM-DDTHH:MM" 형식, 없으면 현재 시각
 
     @field_validator("party_size")
     @classmethod

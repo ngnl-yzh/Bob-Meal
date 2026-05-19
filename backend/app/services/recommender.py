@@ -196,6 +196,19 @@ def distance_meters(lat1, lng1, lat2, lng2) -> float:
 
 def recommend(db: Session, req: RecommendRequest) -> dict:
     """추천 메인 로직"""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    KST = ZoneInfo("Asia/Seoul")
+
+    # 목표 시각 파싱 (없으면 현재 KST)
+    if req.target_datetime:
+        try:
+            target_dt = datetime.strptime(req.target_datetime, "%Y-%m-%dT%H:%M").replace(tzinfo=KST)
+        except ValueError:
+            target_dt = datetime.now(KST)
+    else:
+        target_dt = datetime.now(KST)
+
     radius = calc_radius_meters(req.transport.value, req.available_minutes)
     budget_cap = get_budget_cap(req.identity.value, req.price_mode.value, req.price_max)
 
@@ -234,8 +247,8 @@ def recommend(db: Session, req: RecommendRequest) -> dict:
         if meal_time == "술자리" and not r.has_alcohol:
             continue
 
-        # KST 영업 중 필터 — 현재 닫힌 식당 제외
-        open_status = get_open_status(r.schedule_json or "{}")
+        # KST 영업 중 필터 — 목표 시각 기준 (없으면 현재 시각)
+        open_status = get_open_status(r.schedule_json or "{}", target_dt=target_dt)
         if not open_status["is_open"]:
             continue
 

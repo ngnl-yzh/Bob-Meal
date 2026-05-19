@@ -55,10 +55,13 @@ def _parse_range(range_str: str) -> tuple[dt_time, dt_time]:
 
 
 # ─── 영업 여부 판단 ───────────────────────────────────────────────
-def get_open_status(schedule_json_str: str) -> dict:
+def get_open_status(schedule_json_str: str, target_dt=None) -> dict:
     """
-    현재 KST 기준으로 영업 상태를 반환.
+    지정된 시각(또는 현재 KST) 기준으로 영업 상태를 반환.
 
+    Args:
+        schedule_json_str: schedule_json 문자열
+        target_dt: 기준 datetime (없으면 현재 KST)
     Returns:
         is_open: bool
         today_hours: str  예) "11:00 ~ 21:00"  or  "오늘 휴무"
@@ -74,7 +77,7 @@ def get_open_status(schedule_json_str: str) -> dict:
     if not schedule:
         return _default_status()
 
-    now = now_kst()
+    now = target_dt if target_dt is not None else now_kst()
     today_key = _DAY_KEYS[now.weekday()]   # 0=mon … 6=sun
     cur_time = now.time().replace(second=0, microsecond=0)
 
