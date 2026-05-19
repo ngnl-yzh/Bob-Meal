@@ -36,6 +36,10 @@ class Restaurant(Base):
     hours = Column(String)
     is_open = Column(Boolean, default=True)
     phone = Column(String)
+    open_hour = Column(Integer, default=11)   # 영업 시작 시각 (0~23)
+    close_hour = Column(Integer, default=21)  # 영업 종료 시각 (0~23)
+    has_alcohol = Column(Boolean, default=False)  # 주류 판매 여부
+    meal_times = Column(Text, default='["점심","저녁"]')  # JSON: 적합한 식사 시간대
 
     # 평점/리뷰
     rating = Column(Float, default=0.0)

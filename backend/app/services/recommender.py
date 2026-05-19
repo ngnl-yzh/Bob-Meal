@@ -36,6 +36,14 @@ HIGH_ATMOSPHERE_CATEGORIES = {"한식", "일식"}
 # 혼밥 시 혼밥 가능 태그 보너스
 SOLO_FRIENDLY_TAG = "혼밥 가능"
 
+# 식사 시간대별 영업 시간 기준 — 기획서 추가
+MEAL_TIME_HOURS = {
+    "아침":   (6,  10),
+    "점심":   (11, 14),
+    "저녁":   (17, 21),
+    "술자리": (18, 24),
+}
+
 
 def calc_radius_meters(transport: str, available_minutes: int) -> int:
     """
@@ -91,6 +99,30 @@ def calc_purpose_fit(restaurant: Restaurant, purpose: str, party_size: int) -> f
     return min(1.0, score)
 
 
+def calc_meal_time_fit(restaurant: Restaurant, meal_time: str) -> float:
+    """
+    식사 시간대 적합도 — 0.0 or 1.0
+    - meal_times 목록에 포함되어 있고 영업 시간 내이면 1.0
+    - 술자리인데 has_alcohol=False 이면 0.0
+    """
+    if meal_time == "술자리" and not restaurant.has_alcohol:
+        return 0.0
+
+    meal_times = json.loads(restaurant.meal_times or '["점심","저녁"]')
+    if meal_time not in meal_times:
+        return 0.0
+
+    # 영업 시간 체크
+    open_h = restaurant.open_hour or 0
+    close_h = restaurant.close_hour or 24
+    meal_start, meal_end = MEAL_TIME_HOURS.get(meal_time, (11, 14))
+
+    # 식사 시간대가 영업 구간과 겹치면 OK
+    if open_h <= meal_end and close_h >= meal_start:
+        return 1.0
+    return 0.5  # 등록은 됐지만 영업 시간 경계에 걸릴 때 부분 점수
+
+
 def calc_price_fit(restaurant: Restaurant, budget_cap: int) -> float:
     """가격 적합도 — 예산 내면 높을수록 좋음"""
     if restaurant.price > budget_cap + 2000:  # 2000원 여유
@@ -110,21 +142,25 @@ def calc_total_score(
     purpose: str,
     party_size: int,
     budget_cap: int,
+    meal_time: str = "점심",
 ) -> float:
     """
-    최종 점수 — 기획서 3.2
-    = (별점 × 0.3) + (리뷰수점수 × 0.2) + (목적적합도 × 0.3) + (가격적합도 × 0.2)
+    최종 점수 — 기획서 3.2 (식사 시간대 항목 추가)
+    = (별점 × 0.25) + (리뷰수점수 × 0.15) + (목적적합도 × 0.25)
+      + (가격적합도 × 0.15) + (식사시간대적합도 × 0.20)
     """
     rating_score = (restaurant.rating / 5.0)
     review_score = calc_review_score(restaurant.review_count)
     purpose_score = calc_purpose_fit(restaurant, purpose, party_size)
     price_score = calc_price_fit(restaurant, budget_cap)
+    meal_time_score = calc_meal_time_fit(restaurant, meal_time)
 
     return (
-        rating_score * 0.3
-        + review_score * 0.2
-        + purpose_score * 0.3
-        + price_score * 0.2
+        rating_score * 0.25
+        + review_score * 0.15
+        + purpose_score * 0.25
+        + price_score * 0.15
+        + meal_time_score * 0.20
     )
 
 
@@ -153,7 +189,9 @@ def recommend(db: Session, req: RecommendRequest) -> dict:
     # 1) 전체 식당 조회
     restaurants: List[Restaurant] = db.query(Restaurant).all()
 
-    # 2) 필터링: 거리 + 예산
+    meal_time = req.meal_time.value  # "아침"/"점심"/"저녁"/"술자리"
+
+    # 2) 필터링: 거리 + 예산 + 식사 시간대
     filtered = []
     for r in restaurants:
         # 거리 필터 (좌표 기반 or walk_minutes 기반)
@@ -170,12 +208,16 @@ def recommend(db: Session, req: RecommendRequest) -> dict:
         if r.price > budget_cap + 2000:
             continue
 
+        # 술자리 하드 필터 — 주류 미판매 식당 제외
+        if meal_time == "술자리" and not r.has_alcohol:
+            continue
+
         filtered.append(r)
 
     # 3) 점수 산출
     scored = []
     for r in filtered:
-        score = calc_total_score(r, req.purpose.value, req.party_size, budget_cap)
+        score = calc_total_score(r, req.purpose.value, req.party_size, budget_cap, meal_time)
         scored.append((r, score))
 
     # 4) 정렬
@@ -213,7 +255,7 @@ def recommend(db: Session, req: RecommendRequest) -> dict:
     )
     summary = (
         f"{req.transport.value} {time_label} 이내 · "
-        f"~{budget_cap:,}원 · {req.purpose.value} {req.party_size}인"
+        f"~{budget_cap:,}원 · {meal_time} {req.purpose.value} {req.party_size}인"
     )
 
     return {

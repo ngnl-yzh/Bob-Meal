@@ -2,6 +2,7 @@
 class Conditions {
   final String identity;      // 학생 / 직장인
   final String purpose;       // 혼밥 / 친목 / 회식 / 소개팅 / 비즈니스
+  final String mealTime;      // 아침 / 점심 / 저녁 / 술자리
   final int partySize;        // 1~20
   final String locationType;  // gps / search
   final double? lat;
@@ -15,6 +16,7 @@ class Conditions {
   const Conditions({
     this.identity = '학생',
     this.purpose = '혼밥',
+    this.mealTime = '점심',
     this.partySize = 1,
     this.locationType = 'gps',
     this.lat,
@@ -29,6 +31,7 @@ class Conditions {
   Conditions copyWith({
     String? identity,
     String? purpose,
+    String? mealTime,
     int? partySize,
     String? locationType,
     double? lat,
@@ -42,6 +45,7 @@ class Conditions {
     return Conditions(
       identity: identity ?? this.identity,
       purpose: purpose ?? this.purpose,
+      mealTime: mealTime ?? this.mealTime,
       partySize: partySize ?? this.partySize,
       locationType: locationType ?? this.locationType,
       lat: lat ?? this.lat,
@@ -72,6 +76,7 @@ class Conditions {
   Map<String, dynamic> toJson() => {
         'identity': identity,
         'purpose': purpose,
+        'meal_time': mealTime,
         'party_size': partySize,
         'location_type': locationType,
         if (lat != null) 'lat': lat,

@@ -16,6 +16,12 @@ class PurposeEnum(str, Enum):
     소개팅 = "소개팅"
     비즈니스 = "비즈니스"
 
+class MealTimeEnum(str, Enum):
+    아침 = "아침"
+    점심 = "점심"
+    저녁 = "저녁"
+    술자리 = "술자리"
+
 class TransportEnum(str, Enum):
     도보 = "도보"
     자전거 = "자전거"
@@ -46,6 +52,7 @@ class SortEnum(str, Enum):
 class RecommendRequest(BaseModel):
     identity: IdentityEnum = IdentityEnum.학생
     purpose: PurposeEnum = PurposeEnum.혼밥
+    meal_time: MealTimeEnum = MealTimeEnum.점심   # 아침/점심/저녁/술자리
     party_size: int = 1
     location_type: LocationTypeEnum = LocationTypeEnum.gps
     lat: Optional[float] = 35.1468   # 광주 동구 충장로 기본값

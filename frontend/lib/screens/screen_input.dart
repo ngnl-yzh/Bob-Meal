@@ -55,6 +55,7 @@ class _ScreenInputState extends State<ScreenInput> {
                   delegate: SliverChildListDelegate([
                     _buildIdentity(),
                     _buildPurpose(),
+                    _buildMealTime(),
                     _buildPartySize(),
                     _buildLocation(),
                     _buildTransport(),
@@ -241,6 +242,60 @@ class _ScreenInputState extends State<ScreenInput> {
           }).toList(),
         ),
       );
+
+  // ─── 식사 시간대 ──────────────────────────────────────────
+  Widget _buildMealTime() {
+    const options = ['아침', '점심', '저녁', '술자리'];
+    const icons = ['☀️', '🍱', '🌙', '🍺'];
+    return _section(
+      '식사 시간대',
+      Row(
+        children: List.generate(options.length, (i) {
+          final opt = options[i];
+          final active = _c.mealTime == opt;
+          return Expanded(
+            child: Padding(
+              padding: EdgeInsets.only(
+                left: i == 0 ? 0 : 4,
+                right: i == options.length - 1 ? 0 : 4,
+              ),
+              child: GestureDetector(
+                onTap: () => _set(_c.copyWith(mealTime: opt)),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  decoration: BoxDecoration(
+                    color: active ? kBrand : kCard,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: active ? kBrand : kHair,
+                    ),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(icons[i], style: const TextStyle(fontSize: 18)),
+                      const SizedBox(height: 4),
+                      Text(
+                        opt,
+                        style: TextStyle(
+                          fontFamily: 'Pretendard',
+                          fontSize: 12,
+                          fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+                          color: active ? Colors.white : kInk,
+                          letterSpacing: -0.2,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          );
+        }),
+      ),
+    );
+  }
 
   // ─── 인원 ─────────────────────────────────────────────────
   Widget _buildPartySize() => _section(
