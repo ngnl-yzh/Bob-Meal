@@ -33,6 +33,18 @@ _DAY_KO = {
     "mon": "월", "tue": "화", "wed": "수",
     "thu": "목", "fri": "금", "sat": "토", "sun": "일",
 }
+# build_hours_display 연속성 판단용 역매핑
+_KO_TO_IDX = {"월": 0, "화": 1, "수": 2, "목": 3, "금": 4, "토": 5, "일": 6}
+
+
+def _is_consecutive(days_ko: list) -> bool:
+    """한국어 요일 목록이 달력상 연속인지 확인 (월화수 → True, 월수금 → False)"""
+    if len(days_ko) <= 1:
+        return True
+    indices = [_KO_TO_IDX[d] for d in days_ko if d in _KO_TO_IDX]
+    if not indices:
+        return False
+    return indices == list(range(indices[0], indices[-1] + 1))
 
 
 # ─── KST 현재 시각 ────────────────────────────────────────────────
@@ -168,7 +180,12 @@ def build_hours_display(schedule_json_str: str) -> str:
 
     parts = []
     for time_range, days in groups.items():
-        day_str = "·".join(days) if len(days) == 1 else f"{days[0]}~{days[-1]}"
+        if len(days) == 1:
+            day_str = days[0]
+        elif _is_consecutive(days):
+            day_str = f"{days[0]}~{days[-1]}"
+        else:
+            day_str = "·".join(days)
         if time_range == "휴무":
             parts.append(f"{day_str} 휴무")
         else:

@@ -98,6 +98,22 @@ class ApiService {
     return RestaurantDetail.fromJson(jsonDecode(utf8.decode(res.bodyBytes)));
   }
 
+  // ─── 주변 식당 (지도용) ─────────────────────────────────────
+  Future<List<RestaurantMapItem>> getNearbyRestaurants({
+    required double lat,
+    required double lng,
+    int radiusM = 10000,
+  }) async {
+    final res = await _get('/api/restaurant/nearby', query: {
+      'lat': '$lat',
+      'lng': '$lng',
+      'radius_m': '$radiusM',
+    });
+    _checkStatus(res);
+    final List data = jsonDecode(utf8.decode(res.bodyBytes));
+    return data.map((j) => RestaurantMapItem.fromJson(j)).toList();
+  }
+
   // ─── 날씨 ──────────────────────────────────────────────────
   Future<Map<String, dynamic>> getWeather(double lat, double lng) async {
     final res = await _get('/api/weather', query: {'lat': '$lat', 'lng': '$lng'});
@@ -186,6 +202,19 @@ class ApiService {
   Future<bool> isLoggedIn() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.containsKey('access_token');
+  }
+
+  /// 서버에 토큰 유효성 검증 — 만료/변조된 토큰 감지
+  /// 네트워크 장애 시 false 대신 예외를 전파해 호출측이 판단
+  Future<bool> validateToken() async {
+    if (!await isLoggedIn()) return false;
+    try {
+      final res = await _get('/api/user/me', auth: true)
+          .timeout(const Duration(seconds: 5));
+      return res.statusCode == 200;
+    } catch (_) {
+      return false; // 네트워크 실패 → 유효하지 않은 것으로 처리
+    }
   }
 
   Future<void> logout() async {

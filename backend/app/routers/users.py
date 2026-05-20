@@ -1,9 +1,13 @@
 """회원가입 / 로그인 / 기록 / 찜"""
-from fastapi import APIRouter, Depends, HTTPException, status
+import json
+import time
+from collections import defaultdict
+from threading import Lock
+
+import httpx
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 from typing import List
-import json
-import httpx
 
 from app.database import get_db
 from app.models import User, VisitHistory, Favorite, Restaurant
@@ -17,6 +21,26 @@ from app.services.auth_service import (
 )
 
 router = APIRouter(prefix="/api/user", tags=["사용자"])
+
+# ─── 로그인 브루트포스 방지 (인메모리 레이트 리미터) ──────────────
+_login_attempts: dict = defaultdict(list)
+_login_lock = Lock()
+_MAX_ATTEMPTS = 10      # 분당 최대 시도 횟수
+_WINDOW_SECONDS = 60    # 슬라이딩 윈도우 (초)
+
+
+def _check_login_rate(ip: str) -> None:
+    """분당 10회 초과 시 HTTP 429 반환"""
+    now = time.time()
+    with _login_lock:
+        attempts = [t for t in _login_attempts[ip] if now - t < _WINDOW_SECONDS]
+        _login_attempts[ip] = attempts
+        if len(attempts) >= _MAX_ATTEMPTS:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"로그인 시도가 너무 많습니다. {_WINDOW_SECONDS}초 후 다시 시도해주세요.",
+            )
+        attempts.append(now)
 
 
 @router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED,
@@ -37,7 +61,8 @@ def register(body: UserRegisterIn, db: Session = Depends(get_db)):
 
 
 @router.post("/login", response_model=TokenOut, summary="로그인")
-def login(body: UserLoginIn, db: Session = Depends(get_db)):
+def login(request: Request, body: UserLoginIn, db: Session = Depends(get_db)):
+    _check_login_rate(request.client.host if request.client else "unknown")
     user = db.query(User).filter(User.email == body.email).first()
     if not user or not verify_password(body.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="이메일 또는 비밀번호가 잘못됐습니다")

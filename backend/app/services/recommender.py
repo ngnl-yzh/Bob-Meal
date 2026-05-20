@@ -179,7 +179,8 @@ def calc_total_score(
     = (별점 × 0.25) + (리뷰수점수 × 0.15) + (목적적합도 × 0.25)
       + (가격적합도 × 0.15) + (식사시간대적합도 × 0.20)
     """
-    rating_score = (restaurant.rating / 5.0)
+    # rating=0 은 "미수집" 상태 → 중립값(3점 = 0.6)으로 처리해 신규 식당 불이익 방지
+    rating_score = (restaurant.rating / 5.0) if restaurant.rating > 0 else 0.6
     review_score = calc_review_score(restaurant.review_count)
     purpose_score = calc_purpose_fit(
         restaurant, purpose, party_size, calc_walk_minutes=calc_walk_minutes

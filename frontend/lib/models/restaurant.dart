@@ -225,6 +225,55 @@ class RestaurantDetail {
       );
 }
 
+/// 지도 핀용 간략 모델
+class RestaurantMapItem {
+  final String id;
+  final String name;
+  final String category;
+  final double lat;
+  final double lng;
+  final bool isOpen;
+  final String crowdLevel;
+  final int price;
+  final double rating;
+  final String photoUrl;
+  final String heroIcon;
+  final int heroHue;
+  final List<String> tags;
+
+  const RestaurantMapItem({
+    required this.id,
+    required this.name,
+    required this.category,
+    required this.lat,
+    required this.lng,
+    required this.isOpen,
+    required this.crowdLevel,
+    required this.price,
+    required this.rating,
+    required this.photoUrl,
+    required this.heroIcon,
+    required this.heroHue,
+    required this.tags,
+  });
+
+  factory RestaurantMapItem.fromJson(Map<String, dynamic> j) => RestaurantMapItem(
+        id: j['id'] ?? '',
+        name: j['name'] ?? '',
+        category: j['category'] ?? '',
+        lat: (j['lat'] ?? 0.0).toDouble(),
+        lng: (j['lng'] ?? 0.0).toDouble(),
+        isOpen: j['is_open'] ?? true,
+        crowdLevel: j['crowd_level'] ?? '보통',
+        price: j['price'] ?? 0,
+        rating: (j['rating'] ?? 0.0).toDouble(),
+        photoUrl: j['photo_url'] ?? '',
+        heroIcon: j['hero_icon'] ?? 'stew',
+        heroHue: j['hero_hue'] ?? 28,
+        tags: List<String>.from(j['tags'] ?? []),
+      );
+}
+
 /// 추천 응답 전체
 class RecommendResponse {
   final int total;

@@ -35,11 +35,16 @@ def _get_or_404(db: Session, restaurant_id: str) -> Restaurant:
 # ─── 네이버 플레이스 영업시간 백그라운드 수집 ───────────────────
 def _sync_naver_hours(restaurant_id: str, restaurant_name: str,
                       restaurant_address: str, existing_naver_id: str,
-                      existing_hours: str):
+                      existing_hours: str, existing_schedule_json: str = ""):
     """
     네이버 플레이스에서 영업시간을 가져와 DB 업데이트 (백그라운드 실행).
     ※ 백그라운드 태스크는 반드시 독립 세션을 사용해야 함 (요청 세션은 이미 닫힐 수 있음)
+    ※ 이미 네이버 ID + 스케줄이 있으면 스킵 — 매 요청마다 네이버 API 호출 방지
     """
+    # 이미 수집된 데이터가 있으면 재수집 불필요
+    if existing_naver_id and existing_schedule_json and existing_schedule_json not in ("{}", ""):
+        return
+
     from app.database import SessionLocal
     db = SessionLocal()
     try:
@@ -126,6 +131,20 @@ def _sync_naver_menus(restaurant_id: str, naver_place_id: str):
             r.price = derived
             r.price_confidence = 0.75  # 메뉴 직접 수집이므로 신뢰도 높음
 
+            # PriceData 테이블에도 기록 — get_price_info()가 이를 우선 참조하므로 동기화 필수
+            from app.models import PriceData
+            db.query(PriceData).filter(
+                PriceData.restaurant_id == restaurant_id,
+                PriceData.source == "naver_place_menu",
+            ).delete()
+            db.add(PriceData(
+                restaurant_id=restaurant_id,
+                source="naver_place_menu",
+                price_per_person=derived,
+                confidence=0.75,
+                raw_text=f"네이버 플레이스 메뉴 {len(menus)}개 기준",
+            ))
+
         db.commit()
     except Exception:
         db.rollback()
@@ -208,8 +227,8 @@ def get_restaurant_detail(
     # hours 표시 문자열 — DB에 없으면 schedule_json으로 생성
     hours_display = r.hours or build_hours_display(r.schedule_json or "{}")
 
-    # 도보 이동 시간 동적 계산 (user_lat/lng 제공 시)
-    if user_lat and user_lng and r.lat and r.lng:
+    # 도보 이동 시간 동적 계산 (user_lat/lng 제공 시) — 0.0 좌표도 올바르게 처리
+    if user_lat is not None and user_lng is not None and r.lat and r.lng:
         from app.services.recommender import distance_meters, SPEED_MAP
         dist = distance_meters(user_lat, user_lng, r.lat, r.lng)
         speed = SPEED_MAP.get(transport, settings.SPEED_WALK)
@@ -217,10 +236,11 @@ def get_restaurant_detail(
     else:
         calc_walk = r.walk_minutes  # DB 저장값 (카카오 수집분은 0)
 
-    # 백그라운드: 네이버 플레이스 영업시간 최신화
+    # 백그라운드: 네이버 플레이스 영업시간 최신화 (이미 수집된 경우 스킵)
     background_tasks.add_task(
         _sync_naver_hours,
         r.id, r.name, r.address or "", r.naver_place_id or "", r.hours or "",
+        r.schedule_json or "{}",
     )
     # 백그라운드: 네이버 플레이스 메뉴 수집 (없거나 부족할 때만)
     if r.naver_place_id:

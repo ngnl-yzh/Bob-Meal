@@ -84,12 +84,22 @@ class _AppRootState extends State<AppRoot> {
   }
 
   Future<void> _checkAuth() async {
-    final loggedIn = await ApiService.instance.isLoggedIn();
-    if (mounted) {
-      setState(() {
-        _authState =
-            loggedIn ? _AuthState.authenticated : _AuthState.unauthenticated;
-      });
+    final hasToken = await ApiService.instance.isLoggedIn();
+    if (!hasToken) {
+      if (mounted) setState(() => _authState = _AuthState.unauthenticated);
+      return;
+    }
+    // 서버에서 토큰 유효성 검증 (만료 / 변조 감지)
+    // 네트워크 실패 시에는 보관된 토큰을 유효로 간주 — API 호출 시 자동 처리됨
+    try {
+      final valid = await ApiService.instance.validateToken();
+      if (mounted) {
+        setState(() => _authState =
+            valid ? _AuthState.authenticated : _AuthState.unauthenticated);
+      }
+    } catch (_) {
+      // 네트워크 불가 → 스플래시에서 무한 대기 방지 위해 유효로 처리
+      if (mounted) setState(() => _authState = _AuthState.authenticated);
     }
   }
 

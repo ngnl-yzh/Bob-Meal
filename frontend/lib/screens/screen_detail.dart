@@ -1,5 +1,6 @@
 // 화면 3 — 식당 상세
 import 'package:flutter/material.dart';
+import 'package:shimmer/shimmer.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/restaurant.dart';
 import '../models/conditions.dart';
@@ -56,9 +57,71 @@ class _ScreenDetailState extends State<ScreenDetail> {
     }
   }
 
+  // ─── 로딩 스켈레톤 (shimmer) ───────────────────────────────────
+  Widget _buildShimmer() {
+    return Scaffold(
+      backgroundColor: kBg,
+      body: Shimmer.fromColors(
+        baseColor: const Color(0xFFE5E7EB),
+        highlightColor: const Color(0xFFF9FAFB),
+        child: SingleChildScrollView(
+          physics: const NeverScrollableScrollPhysics(),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 대표 사진 영역
+              Container(height: 240, width: double.infinity, color: Colors.white),
+              const SizedBox(height: 12),
+              // 타이틀 블록
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(height: 22, width: 160, decoration: BoxDecoration(
+                      color: Colors.white, borderRadius: BorderRadius.circular(6))),
+                    const SizedBox(height: 10),
+                    Container(height: 14, width: 100, decoration: BoxDecoration(
+                      color: Colors.white, borderRadius: BorderRadius.circular(6))),
+                    const SizedBox(height: 10),
+                    Row(children: [
+                      Container(height: 28, width: 60, decoration: BoxDecoration(
+                        color: Colors.white, borderRadius: BorderRadius.circular(8))),
+                      const SizedBox(width: 8),
+                      Container(height: 28, width: 60, decoration: BoxDecoration(
+                        color: Colors.white, borderRadius: BorderRadius.circular(8))),
+                    ]),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              // 혼잡도 바 스켈레톤
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 16),
+                height: 90,
+                decoration: BoxDecoration(
+                  color: Colors.white, borderRadius: BorderRadius.circular(16)),
+              ),
+              const SizedBox(height: 12),
+              // 메뉴 카드 스켈레톤 3개
+              ...List.generate(3, (_) => Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                child: Container(
+                  height: 64,
+                  decoration: BoxDecoration(
+                    color: Colors.white, borderRadius: BorderRadius.circular(14)),
+                ),
+              )),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    if (_loading) return _buildShimmer();
     if (_error != null) return Scaffold(body: Center(child: Text(_error!)));
     final r = _detail!;
 

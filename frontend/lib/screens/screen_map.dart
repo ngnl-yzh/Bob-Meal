@@ -69,9 +69,8 @@ class _ScreenMapState extends State<ScreenMap> {
         return;
       }
       final pos = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-        timeLimit: const Duration(seconds: 10),
-      );
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+      ).timeout(const Duration(seconds: 10));
       if (mounted) setState(() { _userLat = pos.latitude; _userLng = pos.longitude; });
     } catch (_) {
       if (mounted) setState(() { _error = 'location_error'; _loading = false; });

@@ -21,6 +21,9 @@ async def lifespan(app: FastAPI):
         seed_database(db)
     finally:
         db.close()
+    # 보안 경고: 기본 SECRET_KEY 사용 중이면 운영 환경에서 위험
+    if settings.SECRET_KEY == "changeme-in-production-32chars!!":
+        print("🚨 경고: SECRET_KEY 가 기본값 → JWT 보안 취약! Railway 환경변수를 설정하세요!")
     print(f"🚀 {settings.APP_NAME} v{settings.APP_VERSION} 시작")
     yield
     print("👋 서버 종료")
