@@ -121,12 +121,18 @@ def get_restaurant_detail(
         for m in sorted(r.menus, key=lambda m: (not m.is_representative, m.id))
     ]
 
+    from app.services.open_hours_service import now_kst as _now_kst
+    now_hour = _now_kst().hour
     crowd_rows = sorted(r.crowd_by_hour, key=lambda c: c.id)
     crowd_out = [
         CrowdByHourOut(
             hour_label=row.hour_label,
             crowd_ratio=row.crowd_ratio,
-            is_now=(row.hour_label == "지금"),
+            # "지금" 레이블이거나 hour_value가 현재 시각과 일치하면 is_now=True
+            is_now=(
+                row.hour_label == "지금"
+                or (row.hour_value is not None and row.hour_value == now_hour)
+            ),
         )
         for row in crowd_rows
     ]

@@ -134,9 +134,16 @@ def get_history(
         .limit(50)
         .all()
     )
+    # N+1 방지: 필요한 식당을 한 번에 조회
+    restaurant_ids = [h.restaurant_id for h in histories]
+    restaurants_map = {
+        r.id: r for r in db.query(Restaurant).filter(
+            Restaurant.id.in_(restaurant_ids)
+        ).all()
+    }
     result = []
     for h in histories:
-        r = db.query(Restaurant).filter(Restaurant.id == h.restaurant_id).first()
+        r = restaurants_map.get(h.restaurant_id)
         if r:
             result.append({
                 "restaurant_id": r.id,
@@ -173,9 +180,16 @@ def get_favorites(
         .filter(Favorite.user_id == current_user.id)
         .all()
     )
+    # N+1 방지: 찜한 식당을 한 번에 조회
+    fav_ids = [f.restaurant_id for f in favs]
+    restaurants_map = {
+        r.id: r for r in db.query(Restaurant).filter(
+            Restaurant.id.in_(fav_ids)
+        ).all()
+    }
     result = []
     for f in favs:
-        r = db.query(Restaurant).filter(Restaurant.id == f.restaurant_id).first()
+        r = restaurants_map.get(f.restaurant_id)
         if r:
             result.append({
                 "restaurant_id": r.id,

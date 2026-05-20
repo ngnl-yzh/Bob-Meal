@@ -22,7 +22,10 @@ settings = get_settings()
 
 # ─── 신뢰도 감쇠 계수 — 기획서 4.2 ──────────────────────────────
 def apply_decay(confidence: float, collected_at: datetime) -> float:
-    days = (datetime.now(timezone.utc).replace(tzinfo=None) - collected_at).days
+    now_naive = datetime.now(timezone.utc).replace(tzinfo=None)
+    # PostgreSQL은 timezone-aware datetime을 반환할 수 있으므로 naive로 통일
+    collected_naive = collected_at.replace(tzinfo=None) if collected_at.tzinfo else collected_at
+    days = (now_naive - collected_naive).days
     if days <= 30:
         return confidence
     elif days <= 90:
