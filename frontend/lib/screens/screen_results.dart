@@ -55,54 +55,59 @@ class _ScreenResultsState extends State<ScreenResults> {
           // ─── 정렬 탭 ──────────────────────────────────────
           _buildSortTabs(sorted.length),
 
-          // ─── 카드 리스트 ───────────────────────────────────
+          // ─── 카드 리스트 / 빈 결과 ────────────────────────
           Expanded(
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 120),
-              children: [
-                // 날씨 배너 (위치 정보 있을 때만 표시 / 출처: 기상청)
-                if (widget.conditions.lat != null && widget.conditions.lng != null)
-                  WeatherBanner(
-                    lat: widget.conditions.lat!,
-                    lng: widget.conditions.lng!,
-                  ),
-                ...visible.asMap().entries.map((e) => RestaurantCardWidget(
-                      restaurant: e.value,
-                      onTap: () => widget.onPick(e.value),
-                      rank: _sort == '추천순' ? e.key + 1 : null,
-                    )),
-                if (!_showAll && sorted.length > 4)
-                  GestureDetector(
-                    onTap: () => setState(() => _showAll = true),
-                    child: Container(
-                      margin: const EdgeInsets.only(top: 4),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      decoration: BoxDecoration(
-                        color: kCard,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: kHair, style: BorderStyle.solid),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            '${sorted.length - 4}개 더 보기',
-                            style: const TextStyle(
-                              fontFamily: 'Pretendard',
-                              fontSize: 13.5,
-                              fontWeight: FontWeight.w600,
-                              color: kInk2,
+            child: sorted.isEmpty
+                ? _buildEmptyState()
+                : ListView(
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 120),
+                    children: [
+                      // 날씨 배너 (위치 정보 있을 때만 표시 / 출처: 기상청)
+                      if (widget.conditions.lat != null &&
+                          widget.conditions.lng != null)
+                        WeatherBanner(
+                          lat: widget.conditions.lat!,
+                          lng: widget.conditions.lng!,
+                        ),
+                      ...visible.asMap().entries.map((e) => RestaurantCardWidget(
+                            restaurant: e.value,
+                            onTap: () => widget.onPick(e.value),
+                            rank: _sort == '추천순' ? e.key + 1 : null,
+                            transport: widget.conditions.transport,
+                          )),
+                      if (!_showAll && sorted.length > 4)
+                        GestureDetector(
+                          onTap: () => setState(() => _showAll = true),
+                          child: Container(
+                            margin: const EdgeInsets.only(top: 4),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            decoration: BoxDecoration(
+                              color: kCard,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                  color: kHair, style: BorderStyle.solid),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  '${sorted.length - 4}개 더 보기',
+                                  style: const TextStyle(
+                                    fontFamily: 'Pretendard',
+                                    fontSize: 13.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: kInk2,
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                const Icon(Icons.keyboard_arrow_down_rounded,
+                                    size: 16, color: kInk2),
+                              ],
                             ),
                           ),
-                          const SizedBox(width: 6),
-                          const Icon(Icons.keyboard_arrow_down_rounded,
-                              size: 16, color: kInk2),
-                        ],
-                      ),
-                    ),
+                        ),
+                    ],
                   ),
-              ],
-            ),
           ),
 
           AppBottomNav(currentIndex: widget.navIndex, onTap: widget.onNavTap),
@@ -182,6 +187,70 @@ class _ScreenResultsState extends State<ScreenResults> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  // ─── 결과 없음 ────────────────────────────────────────────
+  Widget _buildEmptyState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(32, 32, 32, 120),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 76,
+              height: 76,
+              decoration: BoxDecoration(
+                color: kBrand50,
+                borderRadius: BorderRadius.circular(22),
+              ),
+              child: const Center(
+                child: Text('🍽️', style: TextStyle(fontSize: 34)),
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Text('조건에 맞는 식당이 없어요',
+                style: TextStyle(
+                  fontFamily: 'Pretendard',
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                  color: kInk,
+                  letterSpacing: -0.3,
+                )),
+            const SizedBox(height: 10),
+            const Text(
+              '이동 시간을 늘리거나\n예산을 조금 올려보세요',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontFamily: 'Pretendard',
+                fontSize: 14,
+                color: kInk2,
+                height: 1.6,
+                letterSpacing: -0.1,
+              ),
+            ),
+            const SizedBox(height: 28),
+            OutlinedButton.icon(
+              onPressed: widget.onBack,
+              icon: const Icon(Icons.tune_rounded, size: 16),
+              label: const Text('조건 다시 설정',
+                  style: TextStyle(
+                    fontFamily: 'Pretendard',
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  )),
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: kBrand),
+                foregroundColor: kBrand,
+                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

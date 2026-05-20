@@ -1,5 +1,6 @@
 // 화면 1 — 조건 입력
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import '../models/conditions.dart';
 import '../theme.dart';
 import '../widgets/chip_widget.dart';
@@ -27,11 +28,48 @@ class ScreenInput extends StatefulWidget {
 
 class _ScreenInputState extends State<ScreenInput> {
   late Conditions _c;
+  bool _gpsLoading = false;
 
   @override
   void initState() {
     super.initState();
     _c = widget.conditions;
+    // GPS 모드이고 좌표가 없으면 자동으로 위치 가져오기
+    // addPostFrameCallback: 위젯이 완전히 마운트된 후 실행 (context 안전 사용)
+    if (_c.locationType == 'gps' && _c.lat == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _fetchGps());
+    }
+  }
+
+  Future<void> _fetchGps() async {
+    setState(() => _gpsLoading = true);
+    try {
+      LocationPermission perm = await Geolocator.checkPermission();
+      if (perm == LocationPermission.denied) {
+        perm = await Geolocator.requestPermission();
+      }
+      if (perm == LocationPermission.deniedForever ||
+          perm == LocationPermission.denied) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('위치 권한이 필요합니다. 설정에서 허용해 주세요.')),
+          );
+        }
+        return;
+      }
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+      );
+      _set(_c.copyWith(lat: pos.latitude, lng: pos.longitude));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('위치를 가져오지 못했어요: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _gpsLoading = false);
+    }
   }
 
   void _set(Conditions updated) {
@@ -55,6 +93,7 @@ class _ScreenInputState extends State<ScreenInput> {
                   delegate: SliverChildListDelegate([
                     _buildIdentity(),
                     _buildPurpose(),
+                    _buildTargetTime(),
                     _buildMealTime(),
                     _buildPartySize(),
                     _buildLocation(),
@@ -375,8 +414,16 @@ class _ScreenInputState extends State<ScreenInput> {
                   child: GridSelectButton(
                     label: '현재 위치',
                     active: _c.locationType == 'gps',
-                    onTap: () => _set(_c.copyWith(locationType: 'gps')),
-                    leading: const Icon(Icons.my_location_rounded, size: 16),
+                    onTap: () {
+                      _set(_c.copyWith(locationType: 'gps'));
+                      _fetchGps();
+                    },
+                    leading: _gpsLoading
+                        ? const SizedBox(
+                            width: 16, height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: kBrand),
+                          )
+                        : const Icon(Icons.my_location_rounded, size: 16),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -407,9 +454,13 @@ class _ScreenInputState extends State<ScreenInput> {
                           color: kBrand, shape: BoxShape.circle),
                     ),
                     const SizedBox(width: 8),
-                    const Text(
-                      '광주 동구 충장로 일대 · GPS 사용 중',
-                      style: TextStyle(
+                    Text(
+                      _gpsLoading
+                          ? '위치 가져오는 중...'
+                          : _c.lat != null
+                              ? 'GPS 위치 확인됨 (${_c.lat!.toStringAsFixed(4)}, ${_c.lng!.toStringAsFixed(4)})'
+                              : 'GPS 위치를 가져올 수 없습니다',
+                      style: const TextStyle(
                         fontFamily: 'Pretendard',
                         fontSize: 12,
                         fontWeight: FontWeight.w500,
@@ -441,6 +492,95 @@ class _ScreenInputState extends State<ScreenInput> {
       );
 
   // ─── 식사 가능 시간 ────────────────────────────────────────
+  // ─── 식사 시각 ────────────────────────────────────────────────
+  Widget _buildTargetTime() {
+    final dt = _c.targetDateTime;
+    final isNow = dt == null;
+    return _section(
+      '언제 드실 건가요?',
+      Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => _set(_c.copyWith(clearTargetDateTime: true)),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 150),
+                    padding: const EdgeInsets.symmetric(vertical: 11),
+                    decoration: BoxDecoration(
+                      color: isNow ? kBrand : kCard,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: isNow ? kBrand : kHair),
+                    ),
+                    child: Center(
+                      child: Text('지금 바로',
+                          style: TextStyle(
+                            fontFamily: 'Pretendard',
+                            fontSize: 13,
+                            fontWeight: isNow ? FontWeight.w700 : FontWeight.w500,
+                            color: isNow ? Colors.white : kInk,
+                          )),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: GestureDetector(
+                  onTap: () async {
+                    final now = DateTime.now();
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: dt ?? now,
+                      firstDate: now,
+                      lastDate: now.add(const Duration(days: 7)),
+                      locale: const Locale('ko'),
+                    );
+                    if (picked == null || !mounted) return;
+                    final time = await showTimePicker(
+                      context: context,
+                      initialTime: TimeOfDay.fromDateTime(dt ?? now),
+                    );
+                    if (time == null || !mounted) return;
+                    _set(_c.copyWith(
+                      targetDateTime: DateTime(
+                        picked.year, picked.month, picked.day,
+                        time.hour, time.minute,
+                      ),
+                    ));
+                  },
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 150),
+                    padding: const EdgeInsets.symmetric(vertical: 11),
+                    decoration: BoxDecoration(
+                      color: !isNow ? kBrand : kCard,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: !isNow ? kBrand : kHair),
+                    ),
+                    child: Center(
+                      child: Text(
+                        !isNow
+                            ? '${dt!.month}/${dt.day} ${dt.hour.toString().padLeft(2,'0')}:${dt.minute.toString().padLeft(2,'0')}'
+                            : '시간 설정',
+                        style: TextStyle(
+                          fontFamily: 'Pretendard',
+                          fontSize: 13,
+                          fontWeight: !isNow ? FontWeight.w700 : FontWeight.w500,
+                          color: !isNow ? Colors.white : kInk,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildTime() => _section(
         '식사 가능 시간',
         Row(

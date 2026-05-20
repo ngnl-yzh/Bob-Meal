@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/restaurant.dart';
+import '../models/conditions.dart';
 import '../services/api_service.dart';
 import '../theme.dart';
 import '../widgets/smart_photo.dart';
@@ -13,6 +14,7 @@ class ScreenDetail extends StatefulWidget {
   final VoidCallback onBack;
   final int navIndex;
   final ValueChanged<int> onNavTap;
+  final Conditions? conditions; // 위치·이동수단 전달 (walk_minutes 동적 계산용)
 
   const ScreenDetail({
     super.key,
@@ -20,6 +22,7 @@ class ScreenDetail extends StatefulWidget {
     required this.onBack,
     required this.navIndex,
     required this.onNavTap,
+    this.conditions,
   });
 
   @override
@@ -41,7 +44,12 @@ class _ScreenDetailState extends State<ScreenDetail> {
 
   Future<void> _load() async {
     try {
-      final d = await ApiService.instance.getRestaurantDetail(widget.restaurantId);
+      final d = await ApiService.instance.getRestaurantDetail(
+        widget.restaurantId,
+        userLat: widget.conditions?.lat,
+        userLng: widget.conditions?.lng,
+        transport: widget.conditions?.transport ?? '도보',
+      );
       if (mounted) setState(() { _detail = d; _loading = false; });
     } catch (e) {
       if (mounted) setState(() { _error = e.toString(); _loading = false; });
@@ -301,7 +309,7 @@ class _ScreenDetailState extends State<ScreenDetail> {
               )),
           const SizedBox(height: 10),
           _infoRow(Icons.location_on_outlined,
-              '${r.address} · 도보 ${r.walkMinutes}분'),
+              '${r.address} · ${widget.conditions?.transport ?? '도보'} ${r.walkMinutes}분'),
           _infoRow(
             Icons.access_time_rounded,
             null,
@@ -447,7 +455,7 @@ class _ScreenDetailState extends State<ScreenDetail> {
           ),
           const SizedBox(height: 12),
           Text(
-            '이 시간대는 보통 ${r.crowdLevel}해요 · Google Popular Times 기준',
+            '이 시간대는 보통 ${r.crowdLevel}해요 · 통계 기반 예측',
             style: const TextStyle(
               fontFamily: 'Pretendard',
               fontSize: 11.5,
@@ -507,27 +515,45 @@ class _ScreenDetailState extends State<ScreenDetail> {
                     color: kInk,
                     letterSpacing: -0.1,
                   )),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: kBrand50,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Row(
-                  children: const [
-                    Icon(Icons.check_rounded, size: 9, color: kBrandDark),
-                    SizedBox(width: 4),
-                    Text('신뢰도 높음',
-                        style: TextStyle(
-                          fontFamily: 'Pretendard',
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.w600,
-                          color: kBrandDark,
-                          letterSpacing: 0.02 * 10.5,
-                        )),
-                  ],
-                ),
-              ),
+              Builder(builder: (context) {
+                final conf = r.priceInfo?.confidence ?? r.priceConfidence;
+                final label = conf >= 0.8
+                    ? '신뢰도 높음'
+                    : conf >= 0.5
+                        ? '신뢰도 보통'
+                        : '신뢰도 낮음';
+                final color = conf >= 0.8
+                    ? kBrand
+                    : conf >= 0.5
+                        ? const Color(0xFFF59E0B)
+                        : kInk3;
+                final bgColor = conf >= 0.8
+                    ? kBrand50
+                    : conf >= 0.5
+                        ? const Color(0xFFFFFBEB)
+                        : const Color(0xFFF5F5F4);
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: bgColor,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.check_rounded, size: 9, color: color),
+                      const SizedBox(width: 4),
+                      Text(label,
+                          style: TextStyle(
+                            fontFamily: 'Pretendard',
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w600,
+                            color: color,
+                            letterSpacing: 0.02 * 10.5,
+                          )),
+                    ],
+                  ),
+                );
+              }),
             ],
           ),
           const SizedBox(height: 14),
@@ -790,13 +816,17 @@ class _ScreenDetailState extends State<ScreenDetail> {
   Future<void> _openMap(RestaurantDetail r) async {
     final uri = Uri.parse(
         'https://map.kakao.com/link/search/${Uri.encodeComponent(r.name)}');
-    if (await canLaunchUrl(uri)) launchUrl(uri);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
   }
 
   Future<void> _callPhone(RestaurantDetail r) async {
     if (r.phone == null) return;
     final uri = Uri.parse('tel:${r.phone}');
-    if (await canLaunchUrl(uri)) launchUrl(uri);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
   }
 
   String _fmt(int price) => price

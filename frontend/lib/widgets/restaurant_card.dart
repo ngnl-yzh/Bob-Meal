@@ -9,12 +9,14 @@ class RestaurantCardWidget extends StatelessWidget {
   final RestaurantCard restaurant;
   final VoidCallback onTap;
   final int? rank;
+  final String transport; // 이동수단 레이블 표시용
 
   const RestaurantCardWidget({
     super.key,
     required this.restaurant,
     required this.onTap,
     this.rank,
+    this.transport = '도보',
   });
 
   @override
@@ -177,7 +179,7 @@ class RestaurantCardWidget extends StatelessWidget {
                       ),
                       _dot(),
                       Text(
-                        '도보 ${r.walkMinutes}분',
+                        '$transport ${r.walkMinutes}분',
                         style: const TextStyle(
                           fontFamily: 'Pretendard',
                           fontSize: 12,

@@ -1,5 +1,7 @@
 // HTTP 클라이언트 — 백엔드 FastAPI 와 통신
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/restaurant.dart';
@@ -29,66 +31,103 @@ class ApiService {
     return headers;
   }
 
+  // ─── 공통 요청 래퍼 (타임아웃 + 네트워크 오류 처리) ────────
+  static const _timeout = Duration(seconds: 15);
+
+  Future<http.Response> _get(String path, {bool auth = false, Map<String, String>? query}) async {
+    final uri = Uri.parse('$_baseUrl$path').replace(queryParameters: query);
+    try {
+      final res = await http.get(uri, headers: await _headers(auth: auth)).timeout(_timeout);
+      return res;
+    } on TimeoutException {
+      throw ApiException('서버 응답이 너무 느려요. 잠시 후 다시 시도해주세요.', 408);
+    } on SocketException {
+      throw ApiException('인터넷 연결을 확인해주세요.', 0);
+    }
+  }
+
+  Future<http.Response> _post(String path, {bool auth = false, Object? body}) async {
+    try {
+      final res = await http.post(
+        Uri.parse('$_baseUrl$path'),
+        headers: await _headers(auth: auth),
+        body: body != null ? jsonEncode(body) : null,
+      ).timeout(_timeout);
+      return res;
+    } on TimeoutException {
+      throw ApiException('서버 응답이 너무 느려요. 잠시 후 다시 시도해주세요.', 408);
+    } on SocketException {
+      throw ApiException('인터넷 연결을 확인해주세요.', 0);
+    }
+  }
+
+  Future<http.Response> _delete(String path, {bool auth = false}) async {
+    try {
+      final res = await http.delete(
+        Uri.parse('$_baseUrl$path'),
+        headers: await _headers(auth: auth),
+      ).timeout(_timeout);
+      return res;
+    } on TimeoutException {
+      throw ApiException('서버 응답이 너무 느려요. 잠시 후 다시 시도해주세요.', 408);
+    } on SocketException {
+      throw ApiException('인터넷 연결을 확인해주세요.', 0);
+    }
+  }
+
   // ─── 추천 ──────────────────────────────────────────────────
   Future<RecommendResponse> recommend(Conditions cond) async {
-    final res = await http.post(
-      Uri.parse('$_baseUrl/api/recommend'),
-      headers: await _headers(),
-      body: jsonEncode(cond.toJson()),
-    );
+    final res = await _post('/api/recommend', body: cond.toJson());
     _checkStatus(res);
     return RecommendResponse.fromJson(jsonDecode(utf8.decode(res.bodyBytes)));
   }
 
   // ─── 식당 상세 ─────────────────────────────────────────────
-  Future<RestaurantDetail> getRestaurantDetail(String id) async {
-    final res = await http.get(
-      Uri.parse('$_baseUrl/api/restaurant/$id'),
-      headers: await _headers(),
-    );
+  Future<RestaurantDetail> getRestaurantDetail(
+    String id, {
+    double? userLat,
+    double? userLng,
+    String transport = '도보',
+  }) async {
+    final params = <String, String>{'transport': transport};
+    if (userLat != null) params['user_lat'] = '$userLat';
+    if (userLng != null) params['user_lng'] = '$userLng';
+
+    final res = await _get('/api/restaurant/$id', query: params);
     _checkStatus(res);
     return RestaurantDetail.fromJson(jsonDecode(utf8.decode(res.bodyBytes)));
   }
 
   // ─── 날씨 ──────────────────────────────────────────────────
   Future<Map<String, dynamic>> getWeather(double lat, double lng) async {
-    final res = await http.get(
-      Uri.parse('$_baseUrl/api/weather?lat=$lat&lng=$lng'),
-      headers: await _headers(),
-    );
+    final res = await _get('/api/weather', query: {'lat': '$lat', 'lng': '$lng'});
     _checkStatus(res);
     return jsonDecode(utf8.decode(res.bodyBytes));
   }
 
   // ─── 혼잡도 신고 ────────────────────────────────────────────
   Future<void> reportCrowd(String restaurantId, String level) async {
-    await http.post(
-      Uri.parse('$_baseUrl/api/restaurant/crowd-report'),
-      headers: await _headers(auth: true),
-      body: jsonEncode({'restaurant_id': restaurantId, 'level': level}),
+    final res = await _post(
+      '/api/restaurant/crowd-report',
+      auth: true,
+      body: {'restaurant_id': restaurantId, 'level': level},
     );
+    _checkStatus(res);
   }
 
   // ─── 찜 ────────────────────────────────────────────────────
   Future<void> addFavorite(String restaurantId) async {
-    await http.post(
-      Uri.parse('$_baseUrl/api/user/favorites/$restaurantId'),
-      headers: await _headers(auth: true),
-    );
+    final res = await _post('/api/user/favorites/$restaurantId', auth: true);
+    _checkStatus(res);
   }
 
   Future<void> removeFavorite(String restaurantId) async {
-    await http.delete(
-      Uri.parse('$_baseUrl/api/user/favorites/$restaurantId'),
-      headers: await _headers(auth: true),
-    );
+    final res = await _delete('/api/user/favorites/$restaurantId', auth: true);
+    _checkStatus(res);
   }
 
   Future<List<dynamic>> getFavorites() async {
-    final res = await http.get(
-      Uri.parse('$_baseUrl/api/user/favorites'),
-      headers: await _headers(auth: true),
-    );
+    final res = await _get('/api/user/favorites', auth: true);
     _checkStatus(res);
     return jsonDecode(utf8.decode(res.bodyBytes));
   }
@@ -100,16 +139,12 @@ class ApiService {
     required String nickname,
     required String identity,
   }) async {
-    final res = await http.post(
-      Uri.parse('$_baseUrl/api/user/register'),
-      headers: await _headers(),
-      body: jsonEncode({
-        'email': email,
-        'password': password,
-        'nickname': nickname,
-        'identity': identity,
-      }),
-    );
+    final res = await _post('/api/user/register', body: {
+      'email': email,
+      'password': password,
+      'nickname': nickname,
+      'identity': identity,
+    });
     _checkStatus(res);
     return jsonDecode(utf8.decode(res.bodyBytes));
   }
@@ -118,31 +153,34 @@ class ApiService {
     required String email,
     required String password,
   }) async {
-    final res = await http.post(
-      Uri.parse('$_baseUrl/api/user/login'),
-      headers: await _headers(),
-      body: jsonEncode({'email': email, 'password': password}),
-    );
+    final res = await _post('/api/user/login', body: {
+      'email': email,
+      'password': password,
+    });
     _checkStatus(res);
     final data = jsonDecode(utf8.decode(res.bodyBytes));
-    // 토큰 저장
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('access_token', data['access_token']);
+    await _saveUserProfile(prefs, data);
     return data;
   }
 
   Future<Map<String, dynamic>> loginWithKakao(String kakaoAccessToken) async {
-    final res = await http.post(
-      Uri.parse('$_baseUrl/api/user/kakao-login'),
-      headers: await _headers(),
-      body: jsonEncode({'kakao_access_token': kakaoAccessToken}),
-    );
+    final res = await _post('/api/user/kakao-login',
+        body: {'kakao_access_token': kakaoAccessToken});
     _checkStatus(res);
     final data = jsonDecode(utf8.decode(res.bodyBytes));
-    // JWT 저장
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('access_token', data['access_token']);
+    await _saveUserProfile(prefs, data);
     return data;
+  }
+
+  Future<void> _saveUserProfile(dynamic prefs, Map<String, dynamic> data) async {
+    final nickname = data['nickname'] ?? data['user']?['nickname'];
+    final identity = data['identity'] ?? data['user']?['identity'];
+    if (nickname != null) await prefs.setString('user_nickname', nickname as String);
+    if (identity != null) await prefs.setString('user_identity', identity as String);
   }
 
   Future<bool> isLoggedIn() async {
@@ -153,10 +191,17 @@ class ApiService {
   Future<void> logout() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('access_token');
+    await prefs.remove('user_nickname');
+    await prefs.remove('user_identity');
   }
 
   // ─── 에러 처리 ─────────────────────────────────────────────
   void _checkStatus(http.Response res) {
+    if (res.statusCode == 401) {
+      // 토큰 만료 → 자동 로그아웃
+      logout();
+      throw ApiException('로그인이 만료됐어요. 다시 로그인해주세요.', 401);
+    }
     if (res.statusCode < 200 || res.statusCode >= 300) {
       String message = '서버 오류 (${res.statusCode})';
       try {

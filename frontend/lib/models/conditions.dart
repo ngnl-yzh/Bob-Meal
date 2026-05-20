@@ -12,6 +12,7 @@ class Conditions {
   final String priceMode;     // default / custom
   final int? priceMax;
   final String sort;          // 추천순 / 거리순 / 가격순
+  final DateTime? targetDateTime; // null = 지금, 설정 시 해당 시각 기준 추천
 
   const Conditions({
     this.identity = '학생',
@@ -26,6 +27,7 @@ class Conditions {
     this.priceMode = 'default',
     this.priceMax,
     this.sort = '추천순',
+    this.targetDateTime,
   });
 
   Conditions copyWith({
@@ -41,6 +43,8 @@ class Conditions {
     String? priceMode,
     int? priceMax,
     String? sort,
+    DateTime? targetDateTime,
+    bool clearTargetDateTime = false,
   }) {
     return Conditions(
       identity: identity ?? this.identity,
@@ -55,6 +59,7 @@ class Conditions {
       priceMode: priceMode ?? this.priceMode,
       priceMax: priceMax ?? this.priceMax,
       sort: sort ?? this.sort,
+      targetDateTime: clearTargetDateTime ? null : (targetDateTime ?? this.targetDateTime),
     );
   }
 
@@ -86,5 +91,12 @@ class Conditions {
         'price_mode': priceMode,
         if (priceMax != null && priceMode == 'custom') 'price_max': priceMax,
         'sort': sort,
+        if (targetDateTime != null)
+          'target_datetime':
+              '${targetDateTime!.year.toString().padLeft(4, '0')}-'
+              '${targetDateTime!.month.toString().padLeft(2, '0')}-'
+              '${targetDateTime!.day.toString().padLeft(2, '0')}T'
+              '${targetDateTime!.hour.toString().padLeft(2, '0')}:'
+              '${targetDateTime!.minute.toString().padLeft(2, '0')}',
       };
 }
