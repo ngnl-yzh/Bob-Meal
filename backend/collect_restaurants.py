@@ -216,7 +216,13 @@ def collect(
     total_new = 0
     total_skip = 0
     commit_every = 50   # N개마다 커밋
-    seen_ids: set[str] = set()  # 커밋 전 중복 방지용 메모리 세트
+
+    # 기존 DB에 있는 ID를 미리 메모리에 로드 (매 건마다 SELECT 불필요 → 수집 속도 대폭 향상)
+    print("🔍 기존 식당 ID 로딩 중...", end=" ", flush=True)
+    seen_ids: set[str] = set(
+        row[0] for row in db.query(Restaurant.id).all()
+    )
+    print(f"{len(seen_ids):,}개 로드 완료")
 
     headers = {"Authorization": f"KakaoAK {settings.KAKAO_REST_API_KEY}"}
 
@@ -248,10 +254,8 @@ def collect(
 
                                 rest_id = f"kakao_{place_id}"
 
-                                # 중복 체크 (메모리 세트 + DB)
-                                if rest_id in seen_ids or db.query(Restaurant).filter(
-                                    Restaurant.id == rest_id
-                                ).first():
+                                # 중복 체크 (메모리 세트만 — DB는 시작 시 일괄 로드)
+                                if rest_id in seen_ids:
                                     total_skip += 1
                                     continue
 
@@ -324,13 +328,14 @@ def collect(
                                 # N개마다 중간 커밋 + 실시간 상태 업데이트
                                 if not dry_run and total_new % commit_every == 0:
                                     db.commit()
-                                    seen_ids.clear()  # 커밋 후 메모리 세트 초기화
+                                    # seen_ids는 누적 유지 (중복 방지를 위해 초기화하지 않음)
                                     if progress_status is not None:
-                                        progress_status["count"] = total_new
-                                        progress_status["last"] = (
+                                        msg = (
                                             f"수집 중: {total_new:,}개 저장 "
                                             f"(중복 {total_skip:,}개 건너뜀)"
                                         )
+                                        progress_status["count"] = total_new
+                                        progress_status["last"] = msg
                                     print(
                                         f"  [{pt_idx+1}/{len(pts)}] ✅ {total_new:,}개 저장 "
                                         f"(중복 건너뜀 {total_skip:,})"
