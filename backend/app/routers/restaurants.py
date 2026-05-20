@@ -8,7 +8,7 @@ from app.database import get_db
 from app.models import Restaurant, Review, CrowdByHour
 from app.schemas import (
     RestaurantDetailOut, ReviewOut, PriceInfoOut,
-    CrowdReportIn, MenuOut, CrowdByHourOut,
+    CrowdReportIn, MenuOut, CrowdByHourOut, RestaurantMapOut,
 )
 from app.config import get_settings
 from app.services.price_service import get_price_info
@@ -79,6 +79,64 @@ def _sync_naver_hours(restaurant_id: str, restaurant_name: str,
             db.rollback()
     finally:
         db.close()
+
+
+# ─── 주변 식당 지도용 목록 ────────────────────────────────────
+@router.get("/nearby", response_model=List[RestaurantMapOut], summary="주변 식당 지도 목록")
+def get_nearby_restaurants(
+    lat: float = Query(..., description="사용자 위도"),
+    lng: float = Query(..., description="사용자 경도"),
+    radius_m: int = Query(10000, ge=500, le=20000, description="반경 (미터, 기본 10km)"),
+    db: Session = Depends(get_db),
+):
+    """
+    사용자 위치 기준 반경 내 활성 식당 목록 반환 (지도 핀 표시용).
+    - 먼저 바운딩박스로 빠르게 후보 필터링
+    - 이후 Haversine 정확 거리 계산
+    """
+    import math
+
+    lat_delta = radius_m / 111000.0
+    lng_delta = radius_m / (111000.0 * math.cos(math.radians(lat)))
+
+    candidates = (
+        db.query(Restaurant)
+        .filter(
+            Restaurant.is_active == True,
+            Restaurant.lat.between(lat - lat_delta, lat + lat_delta),
+            Restaurant.lng.between(lng - lng_delta, lng + lng_delta),
+        )
+        .all()
+    )
+
+    def _haversine(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
+        R = 6_371_000
+        phi1, phi2 = math.radians(lat1), math.radians(lat2)
+        dphi = math.radians(lat2 - lat1)
+        dlam = math.radians(lng2 - lng1)
+        a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlam / 2) ** 2
+        return R * 2 * math.asin(math.sqrt(a))
+
+    result = []
+    for r in candidates:
+        if _haversine(lat, lng, r.lat, r.lng) <= radius_m:
+            open_status = get_open_status(r.schedule_json or "{}")
+            result.append(RestaurantMapOut(
+                id=r.id,
+                name=r.name,
+                category=r.category,
+                lat=r.lat,
+                lng=r.lng,
+                is_open=open_status["is_open"],
+                crowd_level=r.crowd_level,
+                price=r.price,
+                rating=r.rating,
+                photo_url=r.photo_url or "",
+                hero_icon=r.hero_icon or "stew",
+                hero_hue=r.hero_hue or 28,
+                tags=json.loads(r.tags or "[]"),
+            ))
+    return result
 
 
 # ─── 상세 조회 ────────────────────────────────────────────────

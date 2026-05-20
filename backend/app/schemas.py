@@ -135,6 +135,26 @@ class RestaurantCardOut(BaseModel):
         from_attributes = True
 
 
+# ─── 지도용 (좌표 포함 간략 정보) ────────────────────────────
+class RestaurantMapOut(BaseModel):
+    id: str
+    name: str
+    category: str
+    lat: float
+    lng: float
+    is_open: bool = True
+    crowd_level: CrowdLevelEnum
+    price: int
+    rating: float
+    photo_url: str
+    hero_icon: str
+    hero_hue: int
+    tags: List[str]
+
+    class Config:
+        from_attributes = True
+
+
 # ─── 식당 상세 ────────────────────────────────────────────────
 class RestaurantDetailOut(BaseModel):
     id: str
