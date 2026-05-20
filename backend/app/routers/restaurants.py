@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 
 from app.database import get_db
-from app.models import Restaurant, Review, CrowdByHour
+from app.models import Restaurant, Review, CrowdByHour, Menu
 from app.schemas import (
     RestaurantDetailOut, ReviewOut, PriceInfoOut,
     CrowdReportIn, MenuOut, CrowdByHourOut, RestaurantMapOut,
@@ -17,6 +17,7 @@ from app.services.auth_service import get_current_user
 from app.services.open_hours_service import (
     get_open_status, build_hours_display,
     search_naver_place_id, fetch_naver_place_schedule,
+    fetch_naver_place_menus, derive_price_from_menus,
 )
 from app.models import User
 
@@ -77,6 +78,57 @@ def _sync_naver_hours(restaurant_id: str, restaurant_name: str,
             db.commit()
         except Exception:
             db.rollback()
+    finally:
+        db.close()
+
+
+# ─── 네이버 플레이스 메뉴 백그라운드 수집 ──────────────────────
+def _sync_naver_menus(restaurant_id: str, naver_place_id: str):
+    """
+    네이버 플레이스에서 메뉴 목록을 가져와 DB에 저장.
+    이미 메뉴가 있으면 스킵 (과도한 재수집 방지).
+    """
+    if not naver_place_id:
+        return
+
+    from app.database import SessionLocal
+    db = SessionLocal()
+    try:
+        r = db.query(Restaurant).filter(Restaurant.id == restaurant_id).first()
+        if not r:
+            return
+
+        # 이미 메뉴 5개 이상이면 스킵
+        existing_count = db.query(Menu).filter(Menu.restaurant_id == restaurant_id).count()
+        if existing_count >= 5:
+            return
+
+        menus = fetch_naver_place_menus(naver_place_id)
+        if not menus:
+            return
+
+        # 기존 메뉴 삭제 후 새로 삽입
+        db.query(Menu).filter(Menu.restaurant_id == restaurant_id).delete()
+        for m in menus[:15]:  # 최대 15개
+            db.add(Menu(
+                restaurant_id=restaurant_id,
+                name=m["name"],
+                price=m["price"],
+                photo_url=m.get("photo_url", ""),
+                icon=r.hero_icon or "stew",
+                hue=r.hero_hue or 28,
+                is_representative=m.get("is_representative", False),
+            ))
+
+        # 메뉴 기반으로 restaurant.price 갱신 (대표 메뉴 중앙값)
+        derived = derive_price_from_menus(menus)
+        if derived and derived > 0:
+            r.price = derived
+            r.price_confidence = 0.75  # 메뉴 직접 수집이므로 신뢰도 높음
+
+        db.commit()
+    except Exception:
+        db.rollback()
     finally:
         db.close()
 
@@ -165,11 +217,14 @@ def get_restaurant_detail(
     else:
         calc_walk = r.walk_minutes  # DB 저장값 (카카오 수집분은 0)
 
-    # 백그라운드: 네이버 플레이스 영업시간 최신화 (세션 분리 버그 수정)
+    # 백그라운드: 네이버 플레이스 영업시간 최신화
     background_tasks.add_task(
         _sync_naver_hours,
         r.id, r.name, r.address or "", r.naver_place_id or "", r.hours or "",
     )
+    # 백그라운드: 네이버 플레이스 메뉴 수집 (없거나 부족할 때만)
+    if r.naver_place_id:
+        background_tasks.add_task(_sync_naver_menus, r.id, r.naver_place_id)
 
     menus = [
         MenuOut(

@@ -7,8 +7,10 @@ import json
 from typing import List, Optional, Tuple
 from sqlalchemy.orm import Session
 
+from sqlalchemy.orm import subqueryload
+
 from app.config import get_settings
-from app.models import Restaurant
+from app.models import Restaurant, Menu
 from app.schemas import RecommendRequest, RestaurantCardOut, SortEnum
 from app.services.open_hours_service import get_open_status
 
@@ -133,11 +135,28 @@ def calc_meal_time_fit(restaurant: Restaurant, meal_time: str) -> float:
     return 0.5  # 등록은 됐지만 영업 시간 경계에 걸릴 때 부분 점수
 
 
+def _effective_price(restaurant: Restaurant, budget_cap: int) -> int:
+    """
+    가격 계산 기준 결정.
+    대표 메뉴(is_representative=True)가 있으면 그 중 budget_cap+1000 이하인 것의
+    최고 금액을 사용 (가장 비싸지만 예산 내). 없으면 restaurant.price 사용.
+    """
+    rep_menus = [m for m in (restaurant.menus or []) if m.is_representative]
+    if rep_menus:
+        affordable = [m.price for m in rep_menus if m.price <= budget_cap + 1000]
+        if affordable:
+            return max(affordable)
+        # 대표 메뉴 전부 예산 초과 → 가장 싼 대표 메뉴
+        return min(m.price for m in rep_menus)
+    return restaurant.price
+
+
 def calc_price_fit(restaurant: Restaurant, budget_cap: int) -> float:
-    """가격 적합도 — 예산 내면 높을수록 좋음"""
-    if restaurant.price > budget_cap + 2000:  # 2000원 여유
+    """가격 적합도 — 대표 메뉴 기준, 없으면 restaurant.price 기준"""
+    price = _effective_price(restaurant, budget_cap)
+    if price > budget_cap + 1000:
         return 0.0
-    ratio = restaurant.price / budget_cap if budget_cap > 0 else 1.0
+    ratio = price / budget_cap if budget_cap > 0 else 1.0
     # 예산의 70~90% 범위가 최적
     if 0.7 <= ratio <= 0.9:
         return 1.0
@@ -212,9 +231,12 @@ def recommend(db: Session, req: RecommendRequest) -> dict:
     radius = calc_radius_meters(req.transport.value, req.available_minutes)
     budget_cap = get_budget_cap(req.identity.value, req.price_mode.value, req.price_max)
 
-    # 1) 활성 식당만 조회 (is_active=False = 폐업·이전 추정 → 추천 제외)
+    # 1) 활성 식당만 조회 + 대표 메뉴 eager-load (예산 필터에 사용)
     restaurants: List[Restaurant] = (
-        db.query(Restaurant).filter(Restaurant.is_active == True).all()
+        db.query(Restaurant)
+        .filter(Restaurant.is_active == True)
+        .options(subqueryload(Restaurant.menus))
+        .all()
     )
 
     meal_time = req.meal_time.value  # "아침"/"점심"/"저녁"/"술자리"
@@ -241,9 +263,15 @@ def recommend(db: Session, req: RecommendRequest) -> dict:
         if travel_est > max_one_way:
             continue
 
-        # 예산 필터 (2000원 여유)
-        if r.price > budget_cap + 2000:
-            continue
+        # 예산 필터 — 대표 메뉴 기준 (없으면 restaurant.price), 오차 ±1000원
+        rep_menus = [m for m in (r.menus or []) if m.is_representative]
+        if rep_menus:
+            # 대표 메뉴 중 하나라도 budget+1000 이하면 포함
+            if not any(m.price <= budget_cap + 1000 for m in rep_menus):
+                continue
+        else:
+            if r.price > budget_cap + 1000:
+                continue
 
         # 술자리 하드 필터 — 주류 미판매 식당 제외
         if meal_time == "술자리" and not r.has_alcohol:

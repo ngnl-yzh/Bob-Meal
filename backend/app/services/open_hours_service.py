@@ -16,6 +16,7 @@ schedule_json 형식 (Text 컬럼에 저장):
 """
 import json
 import re
+import statistics
 from datetime import datetime, time as dt_time
 from zoneinfo import ZoneInfo
 from typing import Optional
@@ -250,6 +251,92 @@ def fetch_naver_place_schedule(place_id: str) -> Optional[dict]:
         return _parse_naver_biz_hour(biz_hour)
     except Exception:
         return None
+
+
+# ─── 네이버 플레이스 메뉴 수집 ───────────────────────────────────
+_NAVER_HEADERS = {
+    "referer": "https://map.naver.com/",
+    "user-agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 Chrome/124 Safari/537.36"
+    ),
+}
+
+
+def fetch_naver_place_menus(place_id: str) -> list[dict]:
+    """
+    네이버 플레이스 내부 API에서 메뉴 목록 수집.
+    반환값: [{"name": str, "price": int, "is_representative": bool}, ...]
+    """
+    if not place_id:
+        return []
+
+    try:
+        # 1) summary API — 일부 식당은 menus 포함
+        url = f"https://map.naver.com/v5/api/sites/summary/{place_id}?lang=ko"
+        with httpx.Client(timeout=6.0, headers=_NAVER_HEADERS) as client:
+            resp = client.get(url)
+
+        menus = []
+        if resp.status_code == 200:
+            data = resp.json()
+            raw_menus = data.get("menus") or data.get("menuList") or []
+            for i, item in enumerate(raw_menus):
+                name = item.get("name") or item.get("menuName") or ""
+                price_raw = item.get("price") or item.get("menuPrice") or "0"
+                price = int(re.sub(r"[^\d]", "", str(price_raw))) if price_raw else 0
+                if name and price > 0:
+                    menus.append({
+                        "name": name.strip(),
+                        "price": price,
+                        "photo_url": item.get("imageUrl") or item.get("url") or "",
+                        "is_representative": (i < 3),  # 상위 3개를 대표 메뉴로
+                    })
+
+        if menus:
+            return menus
+
+        # 2) 별도 menus 엔드포인트 시도
+        menu_url = f"https://map.naver.com/v5/api/sites/{place_id}/menus?lang=ko"
+        with httpx.Client(timeout=6.0, headers=_NAVER_HEADERS) as client:
+            resp2 = client.get(menu_url)
+
+        if resp2.status_code == 200:
+            data2 = resp2.json()
+            raw_menus2 = data2.get("menus") or data2.get("menuList") or (
+                data2 if isinstance(data2, list) else []
+            )
+            for i, item in enumerate(raw_menus2):
+                name = item.get("name") or item.get("menuName") or ""
+                price_raw = item.get("price") or item.get("menuPrice") or "0"
+                price = int(re.sub(r"[^\d]", "", str(price_raw))) if price_raw else 0
+                if name and price > 0:
+                    menus.append({
+                        "name": name.strip(),
+                        "price": price,
+                        "photo_url": item.get("imageUrl") or "",
+                        "is_representative": (i < 3),
+                    })
+
+        return menus
+
+    except Exception:
+        return []
+
+
+def derive_price_from_menus(menus: list[dict]) -> Optional[int]:
+    """
+    수집된 메뉴 목록에서 대표 가격 산출.
+    대표 메뉴(is_representative=True) 중앙값 우선,
+    없으면 전체 메뉴 중앙값.
+    """
+    rep_prices = [m["price"] for m in menus if m.get("is_representative") and m["price"] > 0]
+    if rep_prices:
+        return int(statistics.median(rep_prices))
+    all_prices = [m["price"] for m in menus if m["price"] > 0]
+    if all_prices:
+        return int(statistics.median(all_prices))
+    return None
 
 
 def _parse_naver_biz_hour(biz_hour: dict) -> dict:
