@@ -62,6 +62,16 @@ class Settings(BaseSettings):
     SPEED_CAR: int = 500
     MIN_MEAL_MINUTES: int = 20
 
+    # ─── 연구 범위 (광주광역시 북구 용봉동) ────────────────────
+    # 전남대학교 캠퍼스를 포함한 용봉동 및 인접 상권
+    RESEARCH_AREA_NAME: str = "광주 용봉동"
+    RESEARCH_LAT_CENTER: float = 35.1762   # 전남대 정문 기준
+    RESEARCH_LNG_CENTER: float = 126.9097
+    RESEARCH_LAT_MIN: float = 35.162       # 남쪽 경계
+    RESEARCH_LAT_MAX: float = 35.190       # 북쪽 경계
+    RESEARCH_LNG_MIN: float = 126.888      # 서쪽 경계
+    RESEARCH_LNG_MAX: float = 126.930      # 동쪽 경계
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 

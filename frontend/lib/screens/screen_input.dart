@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import '../models/conditions.dart';
+import '../config.dart';
 import '../theme.dart';
 import '../widgets/chip_widget.dart';
 import '../widgets/bottom_nav.dart';
@@ -50,9 +51,17 @@ class _ScreenInputState extends State<ScreenInput> {
       }
       if (perm == LocationPermission.deniedForever ||
           perm == LocationPermission.denied) {
+        // GPS 권한 거부 → 용봉동 중심으로 폴백
+        _set(_c.copyWith(
+          lat: AppConfig.focusLat,
+          lng: AppConfig.focusLng,
+        ));
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('위치 권한이 필요합니다. 설정에서 허용해 주세요.')),
+            const SnackBar(
+              content: Text('위치 권한 없음 — ${AppConfig.focusAreaName} 기준으로 검색합니다'),
+              duration: Duration(seconds: 3),
+            ),
           );
         }
         return;
@@ -62,9 +71,17 @@ class _ScreenInputState extends State<ScreenInput> {
       );
       _set(_c.copyWith(lat: pos.latitude, lng: pos.longitude));
     } catch (e) {
+      // GPS 오류 → 용봉동 중심으로 폴백
+      _set(_c.copyWith(
+        lat: AppConfig.focusLat,
+        lng: AppConfig.focusLng,
+      ));
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('위치를 가져오지 못했어요: $e')),
+          const SnackBar(
+            content: Text('위치를 가져오지 못했어요 — ${AppConfig.focusAreaName} 기준으로 검색합니다'),
+            duration: Duration(seconds: 3),
+          ),
         );
       }
     } finally {
@@ -207,17 +224,43 @@ class _ScreenInputState extends State<ScreenInput> {
                 letterSpacing: -0.7,
                 height: 1.15,
               )),
-          const SizedBox(height: 8),
-          Text(
-            _c.identity == '학생'
-                ? '학생 혼밥 기준 ~8,000원 자동 적용'
-                : '직장인 점심 기준 ~12,000원 자동 적용',
-            style: const TextStyle(
-              fontFamily: 'Pretendard',
-              fontSize: 14,
-              color: kInk2,
-              height: 1.5,
-            ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                decoration: BoxDecoration(
+                  color: kBrand.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: kBrand.withOpacity(0.2)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: const [
+                    Icon(Icons.location_on_rounded, size: 12, color: kBrand),
+                    SizedBox(width: 4),
+                    Text(AppConfig.focusAreaName,
+                        style: TextStyle(
+                          fontFamily: 'Pretendard',
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: kBrand,
+                        )),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                _c.identity == '학생'
+                    ? '~8,000원 자동 적용'
+                    : '~12,000원 자동 적용',
+                style: const TextStyle(
+                  fontFamily: 'Pretendard',
+                  fontSize: 13,
+                  color: kInk2,
+                ),
+              ),
+            ],
           ),
         ],
       ),

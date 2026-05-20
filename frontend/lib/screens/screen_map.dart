@@ -5,6 +5,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import '../models/restaurant.dart';
 import '../services/api_service.dart';
+import '../config.dart';
 import '../theme.dart';
 import '../widgets/bottom_nav.dart';
 import '../widgets/crowd_badge.dart';
@@ -55,7 +56,8 @@ class _ScreenMapState extends State<ScreenMap> {
 
   Future<void> _init() async {
     await _getLocation();
-    if (_userLat != null) await _loadRestaurants();
+    // GPS 성공 여부와 관계없이 용봉동 식당 로드 (실패 시 중심 좌표로 폴백)
+    await _loadRestaurants();
   }
 
   Future<void> _getLocation() async {
@@ -78,13 +80,15 @@ class _ScreenMapState extends State<ScreenMap> {
   }
 
   Future<void> _loadRestaurants() async {
-    if (_userLat == null || _userLng == null) return;
+    // GPS 미취득 시 용봉동 중심으로 폴백
+    final queryLat = _userLat ?? AppConfig.focusLat;
+    final queryLng = _userLng ?? AppConfig.focusLng;
     try {
       setState(() { _loading = true; _error = null; });
       final list = await ApiService.instance.getNearbyRestaurants(
-        lat: _userLat!,
-        lng: _userLng!,
-        radiusM: 10000,
+        lat: queryLat,
+        lng: queryLng,
+        radiusM: AppConfig.focusRadiusM,
       );
       if (mounted) setState(() { _restaurants = list; _loading = false; });
     } catch (e) {
@@ -129,6 +133,21 @@ class _ScreenMapState extends State<ScreenMap> {
                     letterSpacing: -0.4,
                   )),
               const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: kBrand.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: const Text(AppConfig.focusAreaName,
+                    style: TextStyle(
+                      fontFamily: 'Pretendard',
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: kBrand,
+                    )),
+              ),
+              const SizedBox(width: 4),
               if (!_loading && _restaurants.isNotEmpty)
                 Text('${_filtered.length}개',
                     style: const TextStyle(
@@ -265,8 +284,8 @@ class _ScreenMapState extends State<ScreenMap> {
           options: MapOptions(
             initialCenter: _userLat != null
                 ? LatLng(_userLat!, _userLng!)
-                : const LatLng(35.1468, 126.9162),
-            initialZoom: 13.5,
+                : const LatLng(AppConfig.focusLat, AppConfig.focusLng),
+            initialZoom: 15.0, // 용봉동 단위 — 더 좁게
             onTap: (_, __) => setState(() => _selected = null),
           ),
           children: [

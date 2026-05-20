@@ -176,6 +176,9 @@ def get_nearby_restaurants(
             Restaurant.is_active == True,
             Restaurant.lat.between(lat - lat_delta, lat + lat_delta),
             Restaurant.lng.between(lng - lng_delta, lng + lng_delta),
+            # 연구 범위: 용봉동 바운딩박스 외 식당 제외
+            Restaurant.lat.between(settings.RESEARCH_LAT_MIN, settings.RESEARCH_LAT_MAX),
+            Restaurant.lng.between(settings.RESEARCH_LNG_MIN, settings.RESEARCH_LNG_MAX),
         )
         .all()
     )

@@ -232,15 +232,26 @@ def recommend(db: Session, req: RecommendRequest) -> dict:
     radius = calc_radius_meters(req.transport.value, req.available_minutes)
     budget_cap = get_budget_cap(req.identity.value, req.price_mode.value, req.price_max)
 
-    # 1) 활성 식당만 조회 + 대표 메뉴 eager-load (예산 필터에 사용)
+    # 1) 활성 식당 + 연구 범위(용봉동 바운딩박스) 필터 + 대표 메뉴 eager-load
     restaurants: List[Restaurant] = (
         db.query(Restaurant)
-        .filter(Restaurant.is_active == True)
+        .filter(
+            Restaurant.is_active == True,
+            # 연구 단계: 용봉동 바운딩박스 내 식당만 노출
+            Restaurant.lat >= settings.RESEARCH_LAT_MIN,
+            Restaurant.lat <= settings.RESEARCH_LAT_MAX,
+            Restaurant.lng >= settings.RESEARCH_LNG_MIN,
+            Restaurant.lng <= settings.RESEARCH_LNG_MAX,
+        )
         .options(subqueryload(Restaurant.menus))
         .all()
     )
 
     meal_time = req.meal_time.value  # "아침"/"점심"/"저녁"/"술자리"
+
+    # 사용자 위치 미제공 시 용봉동 중심으로 폴백 (GPS 거부·실패 시)
+    lat = req.lat if req.lat is not None else settings.RESEARCH_LAT_CENTER
+    lng = req.lng if req.lng is not None else settings.RESEARCH_LNG_CENTER
 
     # 2) 필터링: 거리 + 예산 + 식사 시간대
     # filtered: (restaurant, travel_minutes, walk_minutes) 튜플 목록
@@ -251,9 +262,9 @@ def recommend(db: Session, req: RecommendRequest) -> dict:
 
     filtered: List[Tuple[Restaurant, int, int]] = []
     for r in restaurants:
-        # 거리 필터 (GPS 좌표 기반 Haversine 우선 → 없으면 DB 저장값)
-        if req.lat and req.lng:
-            dist = distance_meters(req.lat, req.lng, r.lat, r.lng)
+        # 거리 필터 (GPS 좌표 기반 Haversine — 폴백 포함 항상 유효)
+        if lat and lng:
+            dist = distance_meters(lat, lng, r.lat, r.lng)
             travel_est = dist / speed                     # 이동수단 기준 (분) — 필터용
             walk_est   = dist / settings.SPEED_WALK       # 도보 환산 (분) — 표시용
         else:

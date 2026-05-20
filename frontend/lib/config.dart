@@ -19,4 +19,13 @@ class AppConfig {
   // PC IP 확인: ipconfig (Windows) / ifconfig (Mac)
   // 예) static const String _lanUrl = 'http://192.168.0.10:8000';
   // baseUrl 을 _lanUrl 로 임시 교체 후 테스트
+
+  // ─── 연구 범위: 광주광역시 북구 용봉동 ───────────────────────
+  // 전남대학교 정문 기준 중심 좌표
+  static const double focusLat = 35.1762;
+  static const double focusLng = 126.9097;
+  static const String focusAreaName = '광주 용봉동';
+  static const String focusAreaDetail = '광주광역시 북구 용봉동';
+  // 지도 기본 반경 (m) — 연구 단계는 2km로 축소
+  static const int focusRadiusM = 2000;
 }
