@@ -23,6 +23,8 @@ dependencies:
 
   # 지도
   url_launcher: ^6.3.0
+  flutter_map: ^7.0.2
+  latlong2: ^0.9.1
 
   # 이미지
   cached_network_image: ^3.4.1

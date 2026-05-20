@@ -16,7 +16,7 @@ class AppBottomNav extends StatelessWidget {
   Widget build(BuildContext context) {
     final items = [
       _NavItem(icon: Icons.home_outlined, activeIcon: Icons.home_rounded, label: '홈'),
-      _NavItem(icon: Icons.favorite_outline, activeIcon: Icons.favorite_rounded, label: '찜'),
+      _NavItem(icon: Icons.map_outlined, activeIcon: Icons.map_rounded, label: '지도'),
       _NavItem(icon: Icons.receipt_long_outlined, activeIcon: Icons.receipt_long_rounded, label: '기록'),
       _NavItem(icon: Icons.person_outline_rounded, activeIcon: Icons.person_rounded, label: '내정보'),
     ];

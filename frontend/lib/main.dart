@@ -12,6 +12,7 @@ import 'screens/screen_detail.dart';
 import 'screens/screen_login.dart';
 import 'screens/screen_register.dart';
 import 'screens/screen_mypage.dart';
+import 'screens/screen_map.dart';
 import 'widgets/bottom_nav.dart';
 import 'theme.dart';
 
@@ -74,6 +75,7 @@ class _AppRootState extends State<AppRoot> {
   String? _selectedId;
   bool _loading = false;
   int _navIndex = 0;
+  DateTime? _lastBackPress; // 더블탭 종료용
 
   @override
   void initState() {
@@ -217,7 +219,48 @@ class _AppRootState extends State<AppRoot> {
     }
 
     // ── 인증 완료: 메인 앱 ────────────────────────────────────
-    return Stack(
+    return PopScope(
+      canPop: false,
+      onPopInvoked: (didPop) async {
+        if (didPop) return;
+        // 비홈 탭 → 홈 탭으로
+        if (_navIndex != 0) {
+          setState(() => _navIndex = 0);
+          return;
+        }
+        // 상세 → 결과
+        if (_screen == _AppScreen.detail) {
+          setState(() => _screen = _AppScreen.results);
+          return;
+        }
+        // 결과 → 입력
+        if (_screen == _AppScreen.results) {
+          setState(() => _screen = _AppScreen.input);
+          return;
+        }
+        // 입력 화면: 더블탭 2초 내 → 앱 종료
+        final now = DateTime.now();
+        if (_lastBackPress != null &&
+            now.difference(_lastBackPress!) < const Duration(seconds: 2)) {
+          SystemNavigator.pop();
+        } else {
+          _lastBackPress = now;
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Text('한 번 더 누르면 종료됩니다',
+                    style: TextStyle(fontFamily: 'Pretendard')),
+                duration: const Duration(seconds: 2),
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+                margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              ),
+            );
+          }
+        }
+      },
+      child: Stack(
       children: [
         // ① 조건 입력 (홈)
         _buildTransition(
@@ -273,12 +316,16 @@ class _AppRootState extends State<AppRoot> {
             ),
           ),
 
-        // ④ 찜 탭 (준비 중)
+        // ④ 지도 탭
         if (_navIndex == 1)
-          _buildPlaceholder(
-            icon: Icons.favorite_rounded,
-            title: '찜한 식당',
-            subtitle: '마음에 든 식당을 찜해보세요\n곧 업데이트될 예정이에요',
+          ScreenMap(
+            navIndex: _navIndex,
+            onNavTap: _onNavTap,
+            onPickRestaurant: (id) => setState(() {
+              _selectedId = id;
+              _screen = _AppScreen.detail;
+              _navIndex = 0;
+            }),
           ),
 
         // ⑤ 기록 탭 (준비 중)
@@ -334,7 +381,8 @@ class _AppRootState extends State<AppRoot> {
             ),
           ),
       ],
-    );
+      ), // Stack
+    ); // PopScope
   }
 
   // ── 스플래시 화면 ──────────────────────────────────────────
