@@ -158,9 +158,22 @@ def collect_status(x_admin_key: str = Header(..., alias="X-Admin-Key")):
 
 
 @router.delete("/restaurants/all", summary="식당 데이터 전체 삭제 (재수집용)")
-def delete_all_restaurants(x_admin_key: str = Header(..., alias="X-Admin-Key")):
-    """식당 데이터를 전부 삭제합니다. 재수집 전 초기화 용도."""
+def delete_all_restaurants(
+    confirm: str = "",
+    x_admin_key: str = Header(..., alias="X-Admin-Key"),
+):
+    """
+    식당 데이터를 전부 삭제합니다. 재수집 전 초기화 용도.
+
+    **반드시** `?confirm=DELETE_ALL` 파라미터를 붙여야 실행됩니다.
+    실수로 호출해도 데이터가 삭제되지 않도록 보호합니다.
+    """
     _verify_admin(x_admin_key)
+    if confirm != "DELETE_ALL":
+        raise HTTPException(
+            status_code=400,
+            detail="?confirm=DELETE_ALL 파라미터를 추가해야 삭제됩니다. (실수 방지)"
+        )
     from app.database import SessionLocal
     from app.models import Restaurant
     db = SessionLocal()

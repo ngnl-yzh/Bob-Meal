@@ -276,7 +276,7 @@ def recommend(db: Session, req: RecommendRequest) -> dict:
     results = []
     for r, score, travel_min, walk_min in scored[:8]:
         tags = json.loads(r.tags or "[]")
-        open_status = get_open_status(r.schedule_json or "{}")
+        open_status = get_open_status(r.schedule_json or "{}", target_dt=target_dt)  # target_dt 반드시 전달
         results.append(RestaurantCardOut(
             id=r.id,
             name=r.name,
