@@ -212,8 +212,10 @@ def recommend(db: Session, req: RecommendRequest) -> dict:
     radius = calc_radius_meters(req.transport.value, req.available_minutes)
     budget_cap = get_budget_cap(req.identity.value, req.price_mode.value, req.price_max)
 
-    # 1) 전체 식당 조회
-    restaurants: List[Restaurant] = db.query(Restaurant).all()
+    # 1) 활성 식당만 조회 (is_active=False = 폐업·이전 추정 → 추천 제외)
+    restaurants: List[Restaurant] = (
+        db.query(Restaurant).filter(Restaurant.is_active == True).all()
+    )
 
     meal_time = req.meal_time.value  # "아침"/"점심"/"저녁"/"술자리"
 

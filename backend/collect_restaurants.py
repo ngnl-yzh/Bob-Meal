@@ -19,6 +19,7 @@ import time
 import json
 import math
 import argparse
+from datetime import datetime, timezone
 from typing import Iterator, Optional
 
 # app.* 임포트를 위해 backend 디렉토리를 sys.path 에 추가
@@ -203,7 +204,15 @@ def collect(
     limit: Optional[int] = None,
     dry_run: bool = False,
     progress_status: Optional[dict] = None,  # 실시간 진행 상황 업데이트용
+    mark_inactive: bool = False,              # True = 수집 후 미발견 식당 비활성화 (폐업·이전 처리)
 ) -> int:
+    """
+    카카오 로컬 API로 식당을 수집·업서트합니다.
+
+    mark_inactive=True 일 때:
+      이번 수집에서 발견되지 않은 기존 식당을 is_active=False 로 표시합니다.
+      (폐업·이전 감지) region=all 로 전체 수집할 때만 사용하세요.
+    """
     if not settings.KAKAO_REST_API_KEY:
         print("❌  KAKAO_REST_API_KEY 가 .env 에 설정되지 않았습니다.")
         print("   backend/.env 에 다음 줄을 추가하세요:")
@@ -214,8 +223,11 @@ def collect(
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     total_new = 0
-    total_skip = 0
+    total_update = 0
     commit_every = 50   # N개마다 커밋
+
+    # 이번 수집 실행 시각 (UTC naive) — 폐업 감지 기준점
+    run_start = datetime.now(timezone.utc).replace(tzinfo=None)
 
     # 기존 DB에 있는 ID를 미리 메모리에 로드 (매 건마다 SELECT 불필요 → 수집 속도 대폭 향상)
     print("🔍 기존 식당 ID 로딩 중...", end=" ", flush=True)
@@ -254,12 +266,7 @@ def collect(
 
                                 rest_id = f"kakao_{place_id}"
 
-                                # 중복 체크 (메모리 세트만 — DB는 시작 시 일괄 로드)
-                                if rest_id in seen_ids:
-                                    total_skip += 1
-                                    continue
-
-                                # 좌표 파싱
+                                # 좌표 파싱 (신규·기존 공통)
                                 try:
                                     r_lat = float(doc["y"])
                                     r_lng = float(doc["x"])
@@ -276,12 +283,13 @@ def collect(
                                 if not address:
                                     continue
 
+                                name     = doc.get("place_name", "").strip()
+                                phone    = doc.get("phone", "").strip()
                                 kakao_cat = doc.get("category_name", "")
                                 category  = _infer_category(kakao_cat, code)
                                 defaults  = _DEFAULTS.get(category, _DEFAULTS["한식"])
                                 has_alc   = _has_alcohol(kakao_cat)
 
-                                # 주류 취급 식당은 술자리 meal_time 추가
                                 if has_alc:
                                     meal_times = '["저녁","술자리"]'
                                     open_hour  = 17
@@ -291,54 +299,76 @@ def collect(
                                     open_hour  = defaults["open_hour"]
                                     close_hour = defaults["close_hour"]
 
-                                r = Restaurant(
-                                    id=rest_id,
-                                    name=doc.get("place_name", "").strip(),
-                                    category=category,
-                                    address=address,
-                                    lat=r_lat,
-                                    lng=r_lng,
-                                    phone=doc.get("phone", "").strip(),
-                                    hours="",
-                                    rating=0.0,
-                                    review_count=0,
-                                    walk_minutes=0,
-                                    price=defaults["price"],
-                                    price_confidence=0.2,
-                                    crowd_level="보통",
-                                    tags=json.dumps(defaults["tags"], ensure_ascii=False),
-                                    features="[]",
-                                    schedule_json="{}",
-                                    hero_icon=defaults["icon"],
-                                    hero_hue=defaults["hue"],
-                                    has_alcohol=has_alc,
-                                    meal_times=meal_times,
-                                    open_hour=open_hour,
-                                    close_hour=close_hour,
-                                    naver_place_id="",
-                                    photo_url="",
-                                )
-
-                                if not dry_run:
-                                    db.add(r)
-                                seen_ids.add(rest_id)
-
-                                total_new += 1
+                                if rest_id in seen_ids:
+                                    # ── 기존 식당: 카카오 기본 정보 업데이트 ──
+                                    # 이름·주소·좌표·전화 변경 반영 + 활성 상태 복구
+                                    # 평점·가격·리뷰·영업시간 등 큐레이션 데이터는 보존
+                                    if not dry_run:
+                                        db.query(Restaurant).filter(
+                                            Restaurant.id == rest_id
+                                        ).update(
+                                            {
+                                                "name": name,
+                                                "address": address,
+                                                "lat": r_lat,
+                                                "lng": r_lng,
+                                                "phone": phone,
+                                                "last_seen_at": run_start,
+                                                "is_active": True,
+                                            },
+                                            synchronize_session=False,
+                                        )
+                                    total_update += 1
+                                else:
+                                    # ── 신규 식당: INSERT ──
+                                    r = Restaurant(
+                                        id=rest_id,
+                                        name=name,
+                                        category=category,
+                                        address=address,
+                                        lat=r_lat,
+                                        lng=r_lng,
+                                        phone=phone,
+                                        hours="",
+                                        rating=0.0,
+                                        review_count=0,
+                                        walk_minutes=0,
+                                        price=defaults["price"],
+                                        price_confidence=0.2,
+                                        crowd_level="보통",
+                                        tags=json.dumps(defaults["tags"], ensure_ascii=False),
+                                        features="[]",
+                                        schedule_json="{}",
+                                        hero_icon=defaults["icon"],
+                                        hero_hue=defaults["hue"],
+                                        has_alcohol=has_alc,
+                                        meal_times=meal_times,
+                                        open_hour=open_hour,
+                                        close_hour=close_hour,
+                                        naver_place_id="",
+                                        photo_url="",
+                                        last_seen_at=run_start,
+                                        is_active=True,
+                                    )
+                                    if not dry_run:
+                                        db.add(r)
+                                    seen_ids.add(rest_id)  # 같은 세션 내 중복 방지
+                                    total_new += 1
 
                                 # N개마다 중간 커밋 + 실시간 상태 업데이트
-                                if not dry_run and total_new % commit_every == 0:
+                                processed = total_new + total_update
+                                if not dry_run and processed % commit_every == 0:
                                     db.commit()
-                                    # seen_ids는 누적 유지 (중복 방지를 위해 초기화하지 않음)
                                     if progress_status is not None:
                                         msg = (
-                                            f"수집 중: {total_new:,}개 저장 "
-                                            f"(중복 {total_skip:,}개 건너뜀)"
+                                            f"수집 중: 신규 {total_new:,}개 · "
+                                            f"업데이트 {total_update:,}개"
                                         )
                                         progress_status["count"] = total_new
                                         progress_status["last"] = msg
                                     print(
-                                        f"  [{pt_idx+1}/{len(pts)}] ✅ {total_new:,}개 저장 "
-                                        f"(중복 건너뜀 {total_skip:,})"
+                                        f"  [{pt_idx+1}/{len(pts)}] ✅ "
+                                        f"신규 {total_new:,} · 업데이트 {total_update:,}"
                                     )
 
                                 if limit is not None and total_new >= limit:
@@ -362,6 +392,29 @@ def collect(
         if not dry_run:
             db.commit()
 
+        # ── 폐업·이전 감지 ──────────────────────────────────────
+        # 이번 수집에서 발견되지 않은 활성 식당 → is_active=False
+        # (mark_inactive=True + region=all 일 때만 실행 권장)
+        total_inactive = 0
+        if mark_inactive and not dry_run:
+            from sqlalchemy import or_
+            total_inactive = (
+                db.query(Restaurant)
+                .filter(
+                    Restaurant.is_active == True,
+                    or_(
+                        Restaurant.last_seen_at == None,
+                        Restaurant.last_seen_at < run_start,
+                    ),
+                )
+                .update({"is_active": False}, synchronize_session=False)
+            )
+            db.commit()
+            print(
+                f"\n⚠️  폐업·이전 추정: {total_inactive:,}개 비활성화 "
+                f"(이번 수집에서 미발견)"
+            )
+
     except KeyboardInterrupt:
         print("\n⛔  중단됨 — 지금까지 수집된 데이터를 저장합니다...")
         if not dry_run:
@@ -369,8 +422,11 @@ def collect(
     finally:
         db.close()
 
-    action = "[DRY-RUN] 수집" if dry_run else "저장"
-    print(f"\n✅  완료: 신규 {total_new:,}개 {action} · 중복 {total_skip:,}개 건너뜀")
+    action = "[DRY-RUN]" if dry_run else "저장"
+    print(
+        f"\n✅  완료: 신규 {total_new:,}개 {action} · "
+        f"업데이트 {total_update:,}개"
+    )
     return total_new
 
 

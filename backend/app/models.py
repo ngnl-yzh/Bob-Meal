@@ -69,6 +69,10 @@ class Restaurant(Base):
     hero_icon = Column(String, default="stew")  # stew/katsu/kimbap/noodle/rice-bowl/meat
     hero_hue = Column(Integer, default=28)
 
+    # 수집 추적 — 주기적 재수집 시 폐업/이전 감지용
+    last_seen_at = Column(DateTime(timezone=True), nullable=True)   # 마지막으로 카카오 API에서 확인된 시각
+    is_active = Column(Boolean, nullable=False, default=True, server_default="true")  # False = 폐업·이전 추정
+
     # 메타
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

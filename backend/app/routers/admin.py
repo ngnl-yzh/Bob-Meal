@@ -82,7 +82,7 @@ def _save_collect_status(status: str, count: int):
         pass  # DB 저장 실패해도 수집은 계속
 
 
-def _run_collect(region: str, limit: int | None):
+def _run_collect(region: str, limit: int | None, mark_inactive: bool = False):
     """백그라운드 수집 실행"""
     global _collect_status
     _collect_status["running"] = True
@@ -102,10 +102,16 @@ def _run_collect(region: str, limit: int | None):
         from collect_restaurants import collect
 
         regions = ["gwangju", "jeonnam"] if region == "all" else [region]
-        count = collect(regions, limit=limit, progress_status=_collect_status)
+        count = collect(
+            regions,
+            limit=limit,
+            progress_status=_collect_status,
+            mark_inactive=mark_inactive,
+        )
         _collect_status["count"] = count
-        _collect_status["last"] = f"✅ 완료: {count:,}개 수집"
-        _save_collect_status(f"✅ 완료: {count:,}개 수집", count)
+        suffix = " (폐업 감지 활성화)" if mark_inactive else ""
+        _collect_status["last"] = f"✅ 완료: {count:,}개 수집{suffix}"
+        _save_collect_status(_collect_status["last"], count)
     except Exception as e:
         import traceback
         msg = f"❌ 오류: {e} | {traceback.format_exc()[-300:]}"
@@ -118,8 +124,9 @@ def _run_collect(region: str, limit: int | None):
 @router.post("/collect", summary="식당 데이터 수집 시작")
 def start_collect(
     background_tasks: BackgroundTasks,
-    region: str = "all",   # gwangju / jeonnam / all
+    region: str = "all",          # gwangju / jeonnam / all
     limit: int | None = None,
+    mark_inactive: bool = False,  # True = 수집 후 미발견 식당 비활성화 (3개월 주기 재수집용)
     x_admin_key: str = Header(..., alias="X-Admin-Key"),
 ):
     """
@@ -128,6 +135,8 @@ def start_collect(
 
     - **region**: gwangju / jeonnam / all (기본: all)
     - **limit**: 최대 수집 건수 (생략하면 무제한)
+    - **mark_inactive**: True 시 이번 수집에서 발견되지 않은 식당을 폐업·이전으로 처리
+      → region=all 로 **전체 수집** 후에만 사용하세요
 
     헤더: `X-Admin-Key: {ADMIN_SECRET_KEY 값}`
     """
@@ -141,9 +150,9 @@ def start_collect(
     if _collect_status["running"]:
         raise HTTPException(status_code=409, detail="이미 수집 중입니다. /admin/collect/status 확인")
 
-    background_tasks.add_task(_run_collect, region, limit)
+    background_tasks.add_task(_run_collect, region, limit, mark_inactive)
     return {
-        "message": f"수집 시작 ({region})",
+        "message": f"수집 시작 ({region}){' — 폐업 감지 활성화' if mark_inactive else ''}",
         "status_url": "/admin/collect/status",
     }
 
@@ -194,8 +203,13 @@ def db_stats(x_admin_key: str = Header(..., alias="X-Admin-Key")):
     from app.models import Restaurant, User
     db = SessionLocal()
     try:
+        total      = db.query(Restaurant).count()
+        active     = db.query(Restaurant).filter(Restaurant.is_active == True).count()
+        inactive   = total - active
         return {
-            "restaurants": db.query(Restaurant).count(),
+            "restaurants": total,
+            "restaurants_active": active,
+            "restaurants_inactive": inactive,
             "users": db.query(User).count(),
         }
     finally:
