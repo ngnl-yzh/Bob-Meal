@@ -205,16 +205,14 @@ class ApiService {
   }
 
   /// 서버에 토큰 유효성 검증 — 만료/변조된 토큰 감지
-  /// 네트워크 장애 시 false 대신 예외를 전파해 호출측이 판단
+  /// 네트워크 장애 시 예외를 그대로 전파 → 호출측(_checkAuth)에서 유효로 처리
   Future<bool> validateToken() async {
     if (!await isLoggedIn()) return false;
-    try {
-      final res = await _get('/api/user/me', auth: true)
-          .timeout(const Duration(seconds: 5));
-      return res.statusCode == 200;
-    } catch (_) {
-      return false; // 네트워크 실패 → 유효하지 않은 것으로 처리
-    }
+    // 예외를 catch하지 않음: 네트워크 실패는 호출측에서 유효 토큰으로 처리
+    // (Railway 재배포 중 잠깐 다운돼도 로그아웃 안 됨)
+    final res = await _get('/api/user/me', auth: true)
+        .timeout(const Duration(seconds: 5));
+    return res.statusCode == 200;
   }
 
   Future<void> logout() async {
