@@ -234,6 +234,182 @@ def search_naver_place_id(restaurant_name: str, address: str = "") -> Optional[s
         return None
 
 
+# ─── 네이버 플레이스 전체 정보 (1회 호출로 일괄 수집) ────────────
+def fetch_naver_place_full(place_id: str) -> Optional[dict]:
+    """
+    네이버 플레이스 summary API에서 영업시간·메뉴·이미지·좌표를 한 번에 반환.
+    반환 형식:
+    {
+        "schedule": {...},          # schedule_json 형식 dict (없으면 None)
+        "menus": [...],             # fetch_naver_place_menus 와 동일 형식
+        "photo_url": "https://...", # 대표 이미지 URL
+        "lat": float | None,        # WGS84 위도
+        "lng": float | None,        # WGS84 경도
+        "phone": str,
+        "category": str,
+    }
+    """
+    if not place_id:
+        return None
+
+    try:
+        url = f"https://map.naver.com/v5/api/sites/summary/{place_id}?lang=ko"
+        with httpx.Client(
+            timeout=8.0,
+            headers={
+                "referer": "https://map.naver.com/",
+                "user-agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 Chrome/124 Safari/537.36"
+                ),
+            },
+        ) as client:
+            resp = client.get(url)
+
+        if resp.status_code != 200:
+            return None
+
+        data = resp.json()
+        result: dict = {
+            "schedule": None,
+            "menus": [],
+            "photo_url": "",
+            "lat": None,
+            "lng": None,
+            "phone": "",
+            "category": "",
+        }
+
+        # ── 영업시간 ────────────────────────────────────
+        biz_hour = data.get("bizHour", {})
+        if biz_hour:
+            result["schedule"] = _parse_naver_biz_hour(biz_hour)
+
+        # ── 메뉴 ────────────────────────────────────────
+        raw_menus = data.get("menus") or data.get("menuList") or []
+        for i, item in enumerate(raw_menus):
+            name = item.get("name") or item.get("menuName") or ""
+            price_raw = item.get("price") or item.get("menuPrice") or "0"
+            price = int(re.sub(r"[^\d]", "", str(price_raw))) if price_raw else 0
+            if name and price > 0:
+                result["menus"].append({
+                    "name": name.strip(),
+                    "price": price,
+                    "photo_url": item.get("imageUrl") or item.get("url") or "",
+                    "is_representative": (i < 3),
+                })
+
+        # ── 이미지 ──────────────────────────────────────
+        thumb = (
+            data.get("thumbnail")
+            or data.get("imageUrl")
+            or data.get("representativeImageUrl")
+            or ""
+        )
+        if not thumb:
+            imgs = data.get("images") or data.get("photos") or []
+            if imgs and isinstance(imgs[0], dict):
+                thumb = imgs[0].get("url") or imgs[0].get("src") or ""
+            elif imgs and isinstance(imgs[0], str):
+                thumb = imgs[0]
+        result["photo_url"] = thumb
+
+        # ── 좌표 (WGS84) ────────────────────────────────
+        x = data.get("x") or data.get("lng") or data.get("longitude")
+        y = data.get("y") or data.get("lat") or data.get("latitude")
+        if x and y:
+            try:
+                result["lng"] = float(x)
+                result["lat"] = float(y)
+            except (ValueError, TypeError):
+                pass
+
+        # ── 기타 ────────────────────────────────────────
+        result["phone"] = data.get("phone") or data.get("tel") or ""
+        result["category"] = data.get("category") or data.get("categoryName") or ""
+
+        return result
+    except Exception:
+        return None
+
+
+# ─── 네이버 지역 검색으로 식당 목록 수집 ─────────────────────────
+def search_naver_restaurants(
+    query: str,
+    display: int = 5,
+    max_results: int = 100,
+) -> list[dict]:
+    """
+    네이버 로컬 검색 API로 식당 목록을 반환.
+    NAVER_CLIENT_ID / NAVER_CLIENT_SECRET 필요.
+
+    반환: [{"name", "address", "phone", "category", "lat", "lng", "place_id", "mapx", "mapy"}, ...]
+    좌표: mapx/mapy → WGS84 변환 (mapx/10000, mapy/10000)
+    """
+    if not settings.NAVER_CLIENT_ID or not settings.NAVER_CLIENT_SECRET:
+        return []
+
+    url = "https://openapi.naver.com/v1/search/local.json"
+    headers = {
+        "X-Naver-Client-Id": settings.NAVER_CLIENT_ID,
+        "X-Naver-Client-Secret": settings.NAVER_CLIENT_SECRET,
+    }
+
+    results = []
+    seen_titles = set()
+
+    for start in range(1, min(max_results + 1, 1001), display):
+        params = {"query": query, "display": display, "start": start, "sort": "comment"}
+        try:
+            with httpx.Client(timeout=5.0) as client:
+                resp = client.get(url, headers=headers, params=params)
+            if resp.status_code != 200:
+                break
+            data = resp.json()
+            items = data.get("items", [])
+            if not items:
+                break
+
+            for item in items:
+                title = re.sub(r"<[^>]+>", "", item.get("title", "")).strip()
+                if not title or title in seen_titles:
+                    continue
+                seen_titles.add(title)
+
+                # 좌표 변환: 네이버 mapx/mapy → WGS84 (÷10000)
+                try:
+                    mapx = float(item.get("mapx", 0))
+                    mapy = float(item.get("mapy", 0))
+                    lng = mapx / 10000.0
+                    lat = mapy / 10000.0
+                except (ValueError, TypeError):
+                    lat = lng = 0.0
+
+                # 플레이스 ID 추출
+                link = item.get("link", "")
+                m = re.search(r"place/(\d+)", link)
+                place_id = m.group(1) if m else ""
+
+                address = (item.get("roadAddress") or item.get("address") or "").strip()
+
+                results.append({
+                    "name": title,
+                    "address": address,
+                    "phone": item.get("telephone", "").strip(),
+                    "category_raw": item.get("category", ""),
+                    "lat": lat,
+                    "lng": lng,
+                    "naver_place_id": place_id,
+                })
+
+            if len(items) < display:
+                break  # 마지막 페이지
+        except Exception:
+            break
+
+    return results
+
+
 # ─── 네이버 플레이스 영업시간 파싱 ───────────────────────────────
 def fetch_naver_place_schedule(place_id: str) -> Optional[dict]:
     """

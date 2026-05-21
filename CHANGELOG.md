@@ -2,6 +2,24 @@
 
 ---
 
+## [1.4.1] — 2026-05-21
+
+### 네이버 플레이스 배치 보강 파이프라인 구축
+**Backend**
+- `open_hours_service.py`: 두 함수 추가
+  - `fetch_naver_place_full(place_id)` — 영업시간·메뉴·이미지·좌표를 1회 API 호출로 일괄 반환
+  - `search_naver_restaurants(query, ...)` — 네이버 로컬 검색으로 지역 식당 목록 수집
+- `enrich_naver.py` 신규 생성 (배치 보강 스크립트)
+  - `enrich()` — 기존 식당에 naver_place_id 확보 → 영업시간·메뉴·이미지·가격 일괄 주입
+  - `collect()` — 26개 키워드로 네이버 로컬 검색, 광주 북구 bbox 필터 후 신규 저장
+- `admin.py`: 네이버 보강 UI 섹션 및 API 추가
+  - `POST /admin/enrich-naver` (mode: enrich | collect | both)
+  - `GET /admin/enrich-naver/status`
+
+> 데이터 파이프라인: Kakao(좌표·목록) → Naver(영업시간·메뉴·이미지) → App
+
+---
+
 ## [1.4.0+5] — 2026-05-21
 
 ### 서비스 범위 확장: 용봉동 → 광주광역시 북구 + 추천 진단 도구

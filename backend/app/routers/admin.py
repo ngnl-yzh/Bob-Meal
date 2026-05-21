@@ -18,6 +18,9 @@ settings = get_settings()
 # 수집 상태 추적 (메모리 + DB 영속화)
 _collect_status: dict = {"running": False, "last": None, "count": 0}
 
+# 네이버 보강 상태 추적 (메모리)
+_enrich_status: dict = {"running": False, "last": None, "count": 0}
+
 
 def _load_collect_status():
     """서버 시작 시 DB에서 마지막 수집 상태 복원. 수집 중이었으면 '중단됨'으로 표시."""
@@ -122,6 +125,39 @@ def _run_collect(region: str, limit: int | None, mark_inactive: bool = False):
         _save_collect_status(msg, _collect_status.get("count", 0))
     finally:
         _collect_status["running"] = False
+
+
+def _run_enrich_naver(mode: str, limit: int | None):
+    """백그라운드 네이버 보강 실행 (mode: enrich | collect | both)"""
+    global _enrich_status
+    _enrich_status["running"] = True
+    _enrich_status["count"] = 0
+    _enrich_status["last"] = "네이버 보강 시작 중..."
+    try:
+        import sys, os
+        backend_dir = os.getcwd()
+        if backend_dir not in sys.path:
+            sys.path.insert(0, backend_dir)
+        if "enrich_naver" in sys.modules:
+            del sys.modules["enrich_naver"]
+        from enrich_naver import enrich as do_enrich, collect as do_collect
+
+        if mode in ("enrich", "both"):
+            _enrich_status["last"] = "네이버 정보 보강 중..."
+            result = do_enrich(limit=limit, progress_status=_enrich_status)
+            _enrich_status["count"] = result.get("enriched", 0)
+
+        if mode in ("collect", "both"):
+            _enrich_status["last"] = "네이버 검색 수집 중..."
+            new_cnt = do_collect(limit=limit, progress_status=_enrich_status)
+            _enrich_status["count"] += new_cnt
+
+        _enrich_status["last"] = f"✅ 완료: 보강/신규 {_enrich_status['count']:,}건"
+    except Exception as e:
+        import traceback
+        _enrich_status["last"] = f"❌ 오류: {e} | {traceback.format_exc()[-300:]}"
+    finally:
+        _enrich_status["running"] = False
 
 
 # ─── 관리자 웹 UI ─────────────────────────────────────────────────
@@ -402,6 +438,26 @@ _ADMIN_HTML = """<!DOCTYPE html>
       <div class="status-wrap" id="status-wrap"></div>
     </div>
 
+    <!-- 네이버 보강 -->
+    <div class="section">
+      <div class="section-title">🔴 네이버 플레이스 데이터 보강</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">
+        카카오로 수집한 식당에 <strong>영업시간·메뉴·이미지·좌표</strong>를 네이버에서 일괄 주입합니다.
+        NAVER_CLIENT_ID / NAVER_CLIENT_SECRET 환경변수 필요.
+      </div>
+      <div class="collect-row">
+        <select id="e-mode">
+          <option value="enrich" selected>🔄 기존 식당 보강 (영업시간·메뉴·이미지)</option>
+          <option value="collect">🔍 네이버 검색으로 새 식당 발견</option>
+          <option value="both">⚡ 둘 다 실행 (보강 → 신규 발견)</option>
+        </select>
+        <input type="number" id="e-limit" placeholder="최대 건수 (기본: 전체)" min="1" max="9999" style="width:190px" />
+        <button class="btn btn-secondary" id="e-btn" onclick="startEnrich()" style="background:#7c3aed;color:#fff;">보강 시작</button>
+        <button class="btn btn-secondary" onclick="loadEnrichStatus()">상태 확인</button>
+      </div>
+      <div class="status-wrap" id="enrich-status-wrap"></div>
+    </div>
+
     <!-- 식당 목록 -->
     <div class="section">
       <div class="section-title">🏪 수집된 식당</div>
@@ -573,6 +629,53 @@ async function checkStatus() {
 
   const countStr = d.count ? ` &nbsp;(${fmt(d.count)}개)` : '';
   document.getElementById('status-wrap').innerHTML =
+    `<span class="${cls}">${d.running ? '<span class="spinner"></span>' : ''}${escH(msg)}${countStr}</span>`;
+  return d.running;
+}
+
+// ── 네이버 보강 ───────────────────────────────────────
+let enrichPollTimer = null;
+
+async function startEnrich() {
+  const mode  = v('e-mode');
+  const limit = v('e-limit');
+  let url = '/admin/enrich-naver?mode=' + mode;
+  if (limit) url += '&limit=' + limit;
+  const resp = await fetch(url, { method: 'POST', headers: { 'X-Admin-Key': adminKey } });
+  if (resp.ok) {
+    document.getElementById('e-btn').disabled = true;
+    startEnrichPolling();
+  } else {
+    const err = await resp.json().catch(() => ({}));
+    alert('오류: ' + (err.detail || '알 수 없는 오류'));
+  }
+}
+
+function startEnrichPolling() {
+  if (enrichPollTimer) clearInterval(enrichPollTimer);
+  loadEnrichStatus();
+  enrichPollTimer = setInterval(async () => {
+    const running = await loadEnrichStatus();
+    if (!running) {
+      clearInterval(enrichPollTimer);
+      enrichPollTimer = null;
+      document.getElementById('e-btn').disabled = false;
+      loadAll();
+    }
+  }, 3000);
+}
+
+async function loadEnrichStatus() {
+  const resp = await fetch('/admin/enrich-naver/status', { headers: { 'X-Admin-Key': adminKey } });
+  if (!resp.ok) return false;
+  const d = await resp.json();
+  const msg = d.last || '대기 중';
+  let cls = 'status-pill';
+  if (d.running)                cls += ' running';
+  else if ((msg||'').startsWith('✅')) cls += ' done';
+  else if ((msg||'').startsWith('❌')) cls += ' error';
+  const countStr = d.count ? ` &nbsp;(${fmt(d.count)}건)` : '';
+  document.getElementById('enrich-status-wrap').innerHTML =
     `<span class="${cls}">${d.running ? '<span class="spinner"></span>' : ''}${escH(msg)}${countStr}</span>`;
   return d.running;
 }
@@ -819,6 +922,43 @@ def collect_status(x_admin_key: str = Header(..., alias="X-Admin-Key")):
     if not _collect_status["running"] and _collect_status["last"] is None:
         _load_collect_status()
     return _collect_status
+
+
+@router.post("/enrich-naver", summary="네이버 플레이스 데이터 보강")
+def start_enrich_naver(
+    background_tasks: BackgroundTasks,
+    mode: str = "enrich",       # enrich | collect | both
+    limit: int | None = None,
+    x_admin_key: str = Header(..., alias="X-Admin-Key"),
+):
+    """
+    카카오로 수집된 식당에 네이버 플레이스 데이터를 일괄 보강합니다.
+
+    - **mode=enrich** : 기존 식당에 영업시간·메뉴·이미지 주입 (NAVER_CLIENT_ID 필요)
+    - **mode=collect** : 네이버 로컬 검색으로 새 식당 발견
+    - **mode=both** : 보강 후 신규 발견 순서로 실행
+
+    헤더: `X-Admin-Key: {ADMIN_SECRET_KEY 값}`
+    """
+    _verify_admin(x_admin_key)
+
+    if not settings.NAVER_CLIENT_ID or not settings.NAVER_CLIENT_SECRET:
+        raise HTTPException(
+            status_code=500,
+            detail="NAVER_CLIENT_ID 또는 NAVER_CLIENT_SECRET 이 설정되지 않았습니다."
+        )
+    if _enrich_status["running"]:
+        raise HTTPException(status_code=409, detail="이미 보강 작업이 실행 중입니다.")
+
+    background_tasks.add_task(_run_enrich_naver, mode, limit)
+    return {"message": f"네이버 보강 시작 (mode={mode})", "status_url": "/admin/enrich-naver/status"}
+
+
+@router.get("/enrich-naver/status", summary="네이버 보강 상태 확인")
+def enrich_naver_status(x_admin_key: str = Header(..., alias="X-Admin-Key")):
+    """네이버 보강 작업의 현재 진행 상태를 반환합니다."""
+    _verify_admin(x_admin_key)
+    return _enrich_status
 
 
 @router.get("/restaurants", summary="식당 목록 (관리자용, 메뉴수 포함)")
