@@ -2,6 +2,24 @@
 
 ---
 
+## [1.4.4] — 2026-05-21
+
+### 네이버 보강 버그 수정 + 앱 UX 개선
+
+**Backend**
+- `enrich_naver.py`: 핵심 버그 수정
+  - `enrich()` 대상 쿼리 확장: `naver_place_id == None` **OR** `photo_url == ""` 모두 포함
+  - 기존 문제: `collect()`로 추가된 식당(naver_place_id 있음, photo_url 없음)이 보강에서 영구 제외됨
+  - 수정 후: naver_place_id 있으면 검색 생략하고 `fetch_naver_place_full()` 직접 호출
+  - 결과: collect 후 enrich 실행 시 메뉴·사진·가격 정상 수집
+
+**Flutter**
+- `screen_detail.dart` (worktree + hankkirog)
+  - 메뉴 없을 때 빈 공간 대신 "메뉴 정보를 수집 중이에요" 안내 문구
+  - `price = 0` 일 때 "약 0원" 대신 "정보 없음" 표시
+
+---
+
 ## [1.4.3] — 2026-05-21
 
 ### 추천 품질 개선 + 식사 목적 추가

@@ -99,15 +99,23 @@ def enrich(
     db = SessionLocal()
 
     try:
+        # 보강 대상:
+        #  ① naver_place_id 없음 → 검색으로 ID 확보 후 전체 데이터 수집
+        #  ② naver_place_id 있지만 photo_url 없음 → collect()로 추가됐으나 full 데이터 미수집
+        from sqlalchemy import or_ as _or
         query = db.query(Restaurant).filter(
             Restaurant.is_active == True,
-            (Restaurant.naver_place_id == None)
-            | (Restaurant.naver_place_id == ""),
+            _or(
+                Restaurant.naver_place_id == None,
+                Restaurant.naver_place_id == "",
+                Restaurant.photo_url == None,
+                Restaurant.photo_url == "",
+            ),
         )
         targets = query.limit(limit).all() if limit else query.all()
 
         total = len(targets)
-        print(f"🔍 네이버 보강 대상: {total:,}개 (naver_place_id 미확보)")
+        print(f"🔍 네이버 보강 대상: {total:,}개 (naver_place_id 미확보 또는 사진 미수집)")
         if not settings.NAVER_CLIENT_ID:
             print("⚠️  NAVER_CLIENT_ID 미설정 → 네이버 오픈API 검색 불가 (내부 API 기반 보강만 가능)")
 
@@ -118,13 +126,14 @@ def enrich(
                 progress_status["last"] = f"보강 중: {idx}/{total} ({r.name})"
                 progress_status["count"] = enriched
 
-            # ① 네이버 Place ID 검색
-            place_id = ""
-            if settings.NAVER_CLIENT_ID:
-                searched += 1
-                place_id = search_naver_place_id(r.name, r.address) or ""
-                if place_id:
-                    id_found += 1
+            # ① 네이버 Place ID — 이미 있으면 재사용, 없으면 검색
+            place_id = r.naver_place_id or ""
+            if not place_id:
+                if settings.NAVER_CLIENT_ID:
+                    searched += 1
+                    place_id = search_naver_place_id(r.name, r.address) or ""
+                    if place_id:
+                        id_found += 1
 
             if not place_id:
                 skipped += 1

@@ -560,7 +560,8 @@ class _ScreenDetailState extends State<ScreenDetail> {
 
   // ─── 대표 메뉴 ────────────────────────────────────────────
   Widget _buildMenuSection(RestaurantDetail r) {
-    final priceText = r.priceInfo?.displayText ?? '약 ${_fmt(r.price)}원';
+    final priceText = r.priceInfo?.displayText
+        ?? (r.price > 0 ? '약 ${_fmt(r.price)}원' : '정보 없음');
     return Container(
       color: kCard,
       padding: const EdgeInsets.fromLTRB(22, 18, 22, 22),
@@ -620,7 +621,24 @@ class _ScreenDetailState extends State<ScreenDetail> {
             ],
           ),
           const SizedBox(height: 14),
-          ...r.menus.asMap().entries.map((e) => _menuRow(e.value, e.key == 0)),
+          if (r.menus.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Row(
+                children: const [
+                  Icon(Icons.info_outline_rounded, size: 14, color: kInk3),
+                  SizedBox(width: 8),
+                  Text('메뉴 정보를 수집 중이에요',
+                      style: TextStyle(
+                        fontFamily: 'Pretendard',
+                        fontSize: 13,
+                        color: kInk3,
+                      )),
+                ],
+              ),
+            )
+          else
+            ...r.menus.asMap().entries.map((e) => _menuRow(e.value, e.key == 0)),
           const Divider(height: 24, color: Color(0xFFEDEDE9), thickness: 0.5),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
