@@ -28,6 +28,7 @@ SPEED_MAP = {
 # (분위기, 가성비, 접근성, 대화환경)
 PURPOSE_WEIGHTS = {
     "혼밥":    {"atmosphere": 0.5,  "value": 1.5,  "access": 1.5, "social": 0.5},
+    "식사":    {"atmosphere": 0.9,  "value": 1.3,  "access": 1.2, "social": 0.6},  # 2인+ 일반 식사
     "친목":    {"atmosphere": 1.0,  "value": 1.0,  "access": 1.0, "social": 1.5},
     "소개팅":  {"atmosphere": 1.5,  "value": 0.5,  "access": 1.0, "social": 1.5},
     "회식":    {"atmosphere": 1.0,  "value": 1.0,  "access": 1.5, "social": 1.5},
@@ -116,11 +117,13 @@ def calc_meal_time_fit(restaurant: Restaurant, meal_time: str) -> float:
     식사 시간대 적합도 — 0.0 or 1.0
     - meal_times 목록에 포함되어 있고 영업 시간 내이면 1.0
     - 술자리인데 has_alcohol=False 이면 0.0
+    - meal_times 미수집(빈 배열) 시 → 중립값 0.5 (어느 시간대든 불이익 없음)
     """
     if meal_time == "술자리" and not restaurant.has_alcohol:
         return 0.0
 
-    meal_times = json.loads(restaurant.meal_times or '["점심","저녁"]')
+    raw = json.loads(restaurant.meal_times or '["점심","저녁"]')
+    meal_times = raw if raw else ["점심", "저녁"]  # [] → 미수집, 기본값 적용
     if meal_time not in meal_times:
         return 0.0
 
@@ -259,6 +262,13 @@ def recommend(db: Session, req: RecommendRequest) -> dict:
         .all()
     )
 
+    # 좌표 미수집(None) 또는 0.0인 식당 제외 — 거리 계산 오류 방지
+    restaurants = [
+        r for r in restaurants
+        if r.lat is not None and r.lng is not None
+        and r.lat != 0.0 and r.lng != 0.0
+    ]
+
     meal_time = req.meal_time.value  # "아침"/"점심"/"저녁"/"술자리"
 
     # 사용자 위치 미제공 시 북구 중심으로 폴백 (GPS 거부·실패 시)
@@ -289,17 +299,12 @@ def recommend(db: Session, req: RecommendRequest) -> dict:
             continue
 
         # 예산 필터 — 대표 메뉴 기준 (없으면 restaurant.price), 오차 ±2000원
+        # 대표 메뉴 중 1개라도 예산 내면 포함 (이전: 2개 이상 필요 → 과잉 필터링)
         rep_menus = [m for m in (r.menus or []) if m.is_representative]
         if rep_menus:
             affordable = [m for m in rep_menus if m.price <= budget_cap + 2000]
-            if len(rep_menus) >= 2:
-                # 대표 메뉴가 2개 이상 → 그 중 2개 이상이 예산 내여야 포함
-                if len(affordable) < 2:
-                    continue
-            else:
-                # 대표 메뉴가 1개뿐 → 그 1개가 예산 내면 포함
-                if not affordable:
-                    continue
+            if not affordable:
+                continue
         else:
             # 메뉴 미수집 → restaurant.price 기준, 오차 ±2000원
             if r.price > budget_cap + 2000:
@@ -334,7 +339,7 @@ def recommend(db: Session, req: RecommendRequest) -> dict:
 
     # 5) 직렬화
     results = []
-    for r, score, travel_min, walk_min in scored[:8]:
+    for r, score, travel_min, walk_min in scored[:20]:
         tags = json.loads(r.tags or "[]")
         open_status = get_open_status(r.schedule_json or "{}", target_dt=target_dt)  # target_dt 반드시 전달
         results.append(RestaurantCardOut(

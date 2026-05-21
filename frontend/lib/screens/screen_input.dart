@@ -310,20 +310,26 @@ class _ScreenInputState extends State<ScreenInput> {
       );
 
   // ─── 식사 목적 ────────────────────────────────────────────
-  Widget _buildPurpose() => _section(
-        '식사 목적',
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: ['혼밥', '친목', '회식', '소개팅', '비즈니스'].map((opt) {
-            return SelectChip(
-              label: opt,
-              active: _c.purpose == opt,
-              onTap: () => _set(_c.copyWith(purpose: opt)),
-            );
-          }).toList(),
-        ),
-      );
+  Widget _buildPurpose() {
+    // 혼밥은 1인 전용. 2인+ 시 '식사'로 대체
+    final purposes = _c.partySize > 1
+        ? ['식사', '친목', '회식', '소개팅', '비즈니스']
+        : ['혼밥', '식사', '친목', '회식', '소개팅', '비즈니스'];
+    return _section(
+      '식사 목적',
+      Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: purposes.map((opt) {
+          return SelectChip(
+            label: opt,
+            active: _c.purpose == opt,
+            onTap: () => _set(_c.copyWith(purpose: opt)),
+          );
+        }).toList(),
+      ),
+    );
+  }
 
   // ─── 식사 시간대 ──────────────────────────────────────────
   Widget _buildMealTime() {
@@ -393,7 +399,14 @@ class _ScreenInputState extends State<ScreenInput> {
             children: [
               _stepperBtn(
                 Icons.remove,
-                () => _set(_c.copyWith(partySize: (_c.partySize - 1).clamp(1, 20))),
+                () {
+                  final newSize = (_c.partySize - 1).clamp(1, 20);
+                  // 1인으로 줄면 '식사'→'혼밥' 자동 전환
+                  final newPurpose = (newSize == 1 && _c.purpose == '식사')
+                      ? '혼밥'
+                      : _c.purpose;
+                  _set(_c.copyWith(partySize: newSize, purpose: newPurpose));
+                },
               ),
               Expanded(
                 child: Center(
@@ -426,7 +439,14 @@ class _ScreenInputState extends State<ScreenInput> {
               ),
               _stepperBtn(
                 Icons.add,
-                () => _set(_c.copyWith(partySize: (_c.partySize + 1).clamp(1, 20))),
+                () {
+                  final newSize = (_c.partySize + 1).clamp(1, 20);
+                  // 2인 이상이 되면 '혼밥'→'식사' 자동 전환
+                  final newPurpose = (newSize > 1 && _c.purpose == '혼밥')
+                      ? '식사'
+                      : _c.purpose;
+                  _set(_c.copyWith(partySize: newSize, purpose: newPurpose));
+                },
               ),
             ],
           ),

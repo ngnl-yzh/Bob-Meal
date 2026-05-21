@@ -11,6 +11,7 @@ class IdentityEnum(str, Enum):
 
 class PurposeEnum(str, Enum):
     혼밥 = "혼밥"
+    식사 = "식사"      # 2인+ 일반 식사 (혼밥 외 기본)
     친목 = "친목"
     회식 = "회식"
     소개팅 = "소개팅"

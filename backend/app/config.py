@@ -7,7 +7,7 @@ from typing import List
 class Settings(BaseSettings):
     # ─── 앱 기본 ──────────────────────────────────────────────
     APP_NAME: str = "한끼루트 API"
-    APP_VERSION: str = "1.4.2"
+    APP_VERSION: str = "1.4.3"
     DEBUG: bool = False   # Railway 환경변수로 개발 시에만 True
 
     # ─── 데이터베이스 ──────────────────────────────────────────
