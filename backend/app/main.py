@@ -24,6 +24,13 @@ async def lifespan(app: FastAPI):
     # 보안 경고: 기본 SECRET_KEY 사용 중이면 운영 환경에서 위험
     if settings.SECRET_KEY == "changeme-in-production-32chars!!":
         print("🚨 경고: SECRET_KEY 가 기본값 → JWT 보안 취약! Railway 환경변수를 설정하세요!")
+    # DB 타입 명시 — 배포마다 데이터가 사라지면 SQLite 확인 필요
+    if settings.DATABASE_URL.startswith("sqlite"):
+        print("⚠️  DATABASE_URL = SQLite (컨테이너 재시작 시 데이터 초기화됨!)")
+        print("    Railway PostgreSQL 연결을 확인하세요: Variables → DATABASE_URL")
+    else:
+        db_host = settings.DATABASE_URL.split("@")[-1].split("/")[0] if "@" in settings.DATABASE_URL else "unknown"
+        print(f"✅  DATABASE_URL = PostgreSQL ({db_host})")
     print(f"🚀 {settings.APP_NAME} v{settings.APP_VERSION} 시작")
     yield
     print("👋 서버 종료")
@@ -77,3 +84,15 @@ def root():
 @app.get("/health", tags=["헬스체크"])
 def health():
     return {"status": "ok"}
+
+
+@app.get("/health/db", tags=["헬스체크"])
+def health_db():
+    """DB 연결 타입 확인 — SQLite면 데이터가 배포마다 사라짐"""
+    url = settings.DATABASE_URL
+    is_sqlite = url.startswith("sqlite")
+    return {
+        "db_type": "sqlite" if is_sqlite else "postgresql",
+        "persistent": not is_sqlite,
+        "warning": "SQLite는 컨테이너 재시작 시 데이터 초기화됩니다. Railway Variables에 DATABASE_URL(PostgreSQL)을 설정하세요." if is_sqlite else None,
+    }
