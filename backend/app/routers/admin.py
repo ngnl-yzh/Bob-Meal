@@ -101,7 +101,10 @@ def _run_collect(region: str, limit: int | None, mark_inactive: bool = False):
 
         from collect_restaurants import collect
 
-        regions = ["gwangju", "jeonnam"] if region == "all" else [region]
+        if region == "all":
+            regions = ["gwangju", "jeonnam"]
+        else:
+            regions = [region]  # yongbong / gwangju / jeonnam
         count = collect(
             regions,
             limit=limit,
@@ -342,6 +345,13 @@ _ADMIN_HTML = """<!DOCTYPE html>
   </header>
   <main>
 
+    <!-- 연구 범위 배너 -->
+    <div style="background:#fff3e0;border-left:4px solid #FF6B35;border-radius:10px;padding:12px 18px;margin-bottom:18px;display:flex;align-items:center;gap:10px;font-size:13px;">
+      <span style="font-size:18px;">🔬</span>
+      <span><strong>연구 단계</strong> — 서비스 범위: <strong>광주광역시 북구 용봉동</strong>
+        (위도 35.162~35.190 · 경도 126.888~126.930)</span>
+    </div>
+
     <!-- 통계 카드 -->
     <div class="cards-row">
       <div class="stat-card">
@@ -375,9 +385,10 @@ _ADMIN_HTML = """<!DOCTYPE html>
       <div class="section-title">📥 데이터 수집</div>
       <div class="collect-row">
         <select id="c-region">
-          <option value="all">전체 (광주 + 전남)</option>
-          <option value="gwangju">광주</option>
+          <option value="yongbong" selected>🔬 용봉동 (연구 범위)</option>
+          <option value="gwangju">광주 전체</option>
           <option value="jeonnam">전남</option>
+          <option value="all">전체 (광주 + 전남)</option>
         </select>
         <input type="number" id="c-limit" placeholder="최대 건수 (기본: 전체)" min="1" max="99999" style="width:190px" />
         <label>
@@ -395,7 +406,8 @@ _ADMIN_HTML = """<!DOCTYPE html>
       <div class="section-title">🏪 수집된 식당</div>
 
       <div class="tabs">
-        <button class="tab-btn active" onclick="setTab('all',this)">전체</button>
+        <button class="tab-btn active" onclick="setTab('yongbong',this)">🔬 용봉동</button>
+        <button class="tab-btn" onclick="setTab('all',this)">전체</button>
         <button class="tab-btn" onclick="setTab('광주',this)">광주</button>
         <button class="tab-btn" onclick="setTab('전남',this)">전남</button>
         <button class="tab-btn" onclick="setTab('기타',this)">기타</button>
@@ -450,7 +462,7 @@ const PER_PAGE = 50;
 let adminKey = sessionStorage.getItem('hkAdminKey') || '';
 let allData = [];
 let filtered = [];
-let curRegion = 'all';
+let curRegion = 'yongbong'; // 연구 단계 기본값
 let curPage = 1;
 let sortField = 'name';
 let sortAsc = true;
@@ -601,7 +613,17 @@ function parseAddr(addr) {
 
 // ── 필터 드롭다운 ──────────────────────────────────────
 function populateDongFilter() {
-  const base = curRegion === 'all' ? allData : allData.filter(r => r._region === curRegion);
+  let base;
+  if (curRegion === 'yongbong') {
+    base = allData.filter(r =>
+      (r.address || '').includes('용봉동') ||
+      (r.lat >= 35.162 && r.lat <= 35.190 && r.lng >= 126.888 && r.lng <= 126.930)
+    );
+  } else if (curRegion === 'all') {
+    base = allData;
+  } else {
+    base = allData.filter(r => r._region === curRegion);
+  }
   const dongs = [...new Set(base.map(r => r._dong))].filter(d => d !== '-').sort();
   const sel = document.getElementById('q-dong');
   sel.innerHTML = '<option value="">동/읍/면 전체</option>' +
@@ -633,7 +655,15 @@ function getFiltered() {
   const active = v('q-active');
 
   let list = allData;
-  if (curRegion !== 'all') list = list.filter(r => r._region === curRegion);
+  if (curRegion === 'yongbong') {
+    // 연구 범위: 주소에 용봉동 포함 OR 용봉동 바운딩박스 내 좌표
+    list = list.filter(r =>
+      (r.address || '').includes('용봉동') ||
+      (r.lat >= 35.162 && r.lat <= 35.190 && r.lng >= 126.888 && r.lng <= 126.930)
+    );
+  } else if (curRegion !== 'all') {
+    list = list.filter(r => r._region === curRegion);
+  }
   if (q)      list = list.filter(r => (r.name||'').toLowerCase().includes(q) || (r.address||'').toLowerCase().includes(q));
   if (cat)    list = list.filter(r => r.category === cat);
   if (dong)   list = list.filter(r => r._dong === dong);
@@ -737,7 +767,7 @@ def admin_ui():
 @router.post("/collect", summary="식당 데이터 수집 시작")
 def start_collect(
     background_tasks: BackgroundTasks,
-    region: str = "all",          # gwangju / jeonnam / all
+    region: str = "yongbong",      # yongbong (기본) / gwangju / jeonnam / all
     limit: int | None = None,
     mark_inactive: bool = False,  # True = 수집 후 미발견 식당 비활성화 (3개월 주기 재수집용)
     x_admin_key: str = Header(..., alias="X-Admin-Key"),
@@ -746,7 +776,7 @@ def start_collect(
     카카오 로컬 API로 식당 데이터를 수집합니다.
     백그라운드로 실행되며 즉시 응답을 반환합니다.
 
-    - **region**: gwangju / jeonnam / all (기본: all)
+    - **region**: yongbong (기본·연구 범위) / gwangju / jeonnam / all
     - **limit**: 최대 수집 건수 (생략하면 무제한)
     - **mark_inactive**: True 시 이번 수집에서 발견되지 않은 식당을 폐업·이전으로 처리
       → region=all 로 **전체 수집** 후에만 사용하세요

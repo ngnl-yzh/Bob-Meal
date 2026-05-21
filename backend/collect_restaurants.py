@@ -118,6 +118,15 @@ _DEFAULTS: dict[str, dict] = {
 # 수집 그리드 정의
 # ──────────────────────────────────────────────────────────────
 _GRIDS: dict[str, dict] = {
+    # ── 연구 범위 (기본 수집 대상) ────────────────────────────────
+    "yongbong": {
+        "lat_range": (35.162, 35.190),
+        "lng_range": (126.888, 126.930),
+        "step_km":  0.3,     # 용봉동 집중 수집 — 매우 촘촘하게
+        "radius":   250,     # 반경 최소화 (중복 억제)
+        "desc":     "광주 북구 용봉동",
+    },
+    # ── 확장 수집 (배포 단계에서 활성화) ─────────────────────────
     "gwangju": {
         "lat_range": (35.05, 35.25),
         "lng_range": (126.78, 127.02),
@@ -446,9 +455,9 @@ def main():
     )
     parser.add_argument(
         "--region",
-        choices=["gwangju", "jeonnam", "all"],
-        default="all",
-        help="수집 지역 (기본: all)",
+        choices=["yongbong", "gwangju", "jeonnam", "all"],
+        default="yongbong",
+        help="수집 지역 (기본: yongbong — 연구 단계)",
     )
     parser.add_argument(
         "--limit",
@@ -464,7 +473,10 @@ def main():
     )
     args = parser.parse_args()
 
-    regions = ["gwangju", "jeonnam"] if args.region == "all" else [args.region]
+    if args.region == "all":
+        regions = ["gwangju", "jeonnam"]
+    else:
+        regions = [args.region]
 
     print("한끼루트 식당 수집기")
     print(f"  지역  : {', '.join(r for r in regions)}")
