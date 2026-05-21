@@ -60,7 +60,7 @@ def _verify_admin(x_admin_key: str = Header(..., alias="X-Admin-Key")):
                 "Railway 환경변수에 ADMIN_SECRET_KEY 를 설정하세요."
             ),
         )
-    if x_admin_key != settings.ADMIN_SECRET_KEY:
+    if x_admin_key.strip() != settings.ADMIN_SECRET_KEY.strip():
         raise HTTPException(status_code=403, detail="관리자 키가 올바르지 않습니다.")
 
 
@@ -1091,6 +1091,26 @@ def test_kakao(x_admin_key: str = Header(..., alias="X-Admin-Key")):
         }
     except Exception as e:
         return {"error": str(e)}
+
+
+@router.get("/debug/key-info", summary="ADMIN_SECRET_KEY 진단 (값 비공개)")
+def debug_key_info():
+    """
+    Railway Variables의 ADMIN_SECRET_KEY 상태를 확인합니다.
+    키 값 자체는 노출하지 않고 길이·앞뒤 글자만 반환합니다.
+    """
+    key = settings.ADMIN_SECRET_KEY
+    if not key:
+        return {"set": False, "length": 0, "note": "ADMIN_SECRET_KEY 미설정"}
+    return {
+        "set": True,
+        "length": len(key),
+        "stripped_length": len(key.strip()),
+        "has_leading_space": key != key.lstrip(),
+        "has_trailing_space": key != key.rstrip(),
+        "first_char": repr(key[0]),
+        "last_char": repr(key[-1]),
+    }
 
 
 @router.get("/backup/restaurants", summary="식당 데이터 JSON 백업")
