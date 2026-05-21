@@ -36,12 +36,22 @@ def recommend_debug(db: Session = Depends(get_db)):
     total_inactive = total_all - total_active
 
     # ── 2. 연구 범위 bbox 내 식당 ──────────────────────────────
+    from sqlalchemy import or_, and_
     bbox_q = db.query(Restaurant).filter(
         Restaurant.is_active == True,
-        Restaurant.lat >= settings.RESEARCH_LAT_MIN,
-        Restaurant.lat <= settings.RESEARCH_LAT_MAX,
-        Restaurant.lng >= settings.RESEARCH_LNG_MIN,
-        Restaurant.lng <= settings.RESEARCH_LNG_MAX,
+        or_(
+            Restaurant.address.contains("북구"),
+            and_(
+                Restaurant.lat >= settings.RESEARCH_LAT_MIN,
+                Restaurant.lat <= settings.RESEARCH_LAT_MAX,
+                Restaurant.lng >= settings.RESEARCH_LNG_MIN,
+                Restaurant.lng <= settings.RESEARCH_LNG_MAX,
+                ~Restaurant.address.contains("서구"),
+                ~Restaurant.address.contains("동구"),
+                ~Restaurant.address.contains("남구"),
+                ~Restaurant.address.contains("광산구"),
+            ),
+        ),
     )
     in_bbox = bbox_q.count()
 

@@ -232,16 +232,28 @@ def recommend(db: Session, req: RecommendRequest) -> dict:
     radius = calc_radius_meters(req.transport.value, req.available_minutes)
     budget_cap = get_budget_cap(req.identity.value, req.price_mode.value, req.price_max)
 
-    # 1) 활성 식당 + 연구 범위(광주 북구 바운딩박스) 필터 + 대표 메뉴 eager-load
+    # 1) 활성 식당 + 연구 범위(광주 북구) 필터 + 대표 메뉴 eager-load
+    # 주소 기반(북구 포함) + bbox 이중 필터 → 인접구(서구·동구 등) 혼입 방지
+    from sqlalchemy import or_, and_
     restaurants: List[Restaurant] = (
         db.query(Restaurant)
         .filter(
             Restaurant.is_active == True,
-            # 연구 단계: 광주 북구 바운딩박스 내 식당만 노출
-            Restaurant.lat >= settings.RESEARCH_LAT_MIN,
-            Restaurant.lat <= settings.RESEARCH_LAT_MAX,
-            Restaurant.lng >= settings.RESEARCH_LNG_MIN,
-            Restaurant.lng <= settings.RESEARCH_LNG_MAX,
+            or_(
+                # ① 주소에 '북구' 포함 (가장 정확)
+                Restaurant.address.contains("북구"),
+                # ② 주소가 짧거나 미기입된 경우 bbox 좌표로 보조 (단, 타구 제외)
+                and_(
+                    Restaurant.lat >= settings.RESEARCH_LAT_MIN,
+                    Restaurant.lat <= settings.RESEARCH_LAT_MAX,
+                    Restaurant.lng >= settings.RESEARCH_LNG_MIN,
+                    Restaurant.lng <= settings.RESEARCH_LNG_MAX,
+                    ~Restaurant.address.contains("서구"),
+                    ~Restaurant.address.contains("동구"),
+                    ~Restaurant.address.contains("남구"),
+                    ~Restaurant.address.contains("광산구"),
+                ),
+            ),
         )
         .options(subqueryload(Restaurant.menus))
         .all()
