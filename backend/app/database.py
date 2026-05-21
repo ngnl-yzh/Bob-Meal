@@ -14,8 +14,16 @@ engine = create_engine(
     settings.DATABASE_URL,
     connect_args=connect_args,
     echo=settings.DEBUG,
-    # PostgreSQL pool 설정 (SQLite는 무시됨)
     pool_pre_ping=True,
+    # Railway PostgreSQL: 연결 타임아웃 + pool 크기 제한
+    pool_timeout=30,
+    pool_recycle=300,
+    pool_size=5,
+    max_overflow=10,
+) if not settings.DATABASE_URL.startswith("sqlite") else create_engine(
+    settings.DATABASE_URL,
+    connect_args=connect_args,
+    echo=settings.DEBUG,
 )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

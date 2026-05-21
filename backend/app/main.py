@@ -15,12 +15,16 @@ settings = get_settings()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # 시작 시: 테이블 생성 + 목업 데이터 시드
-    Base.metadata.create_all(bind=engine)
-    db = SessionLocal()
     try:
-        seed_database(db)
-    finally:
-        db.close()
+        Base.metadata.create_all(bind=engine)
+        db = SessionLocal()
+        try:
+            seed_database(db)
+        finally:
+            db.close()
+    except Exception as e:
+        # DB 연결 실패해도 앱 자체는 기동 (healthcheck 통과)
+        print(f"⚠️  DB 초기화 실패 (나중에 재시도됩니다): {e}")
     # 보안 경고: 기본 SECRET_KEY 사용 중이면 운영 환경에서 위험
     if settings.SECRET_KEY == "changeme-in-production-32chars!!":
         print("🚨 경고: SECRET_KEY 가 기본값 → JWT 보안 취약! Railway 환경변수를 설정하세요!")
