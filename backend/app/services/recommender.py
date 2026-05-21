@@ -138,12 +138,12 @@ def calc_meal_time_fit(restaurant: Restaurant, meal_time: str) -> float:
 def _effective_price(restaurant: Restaurant, budget_cap: int) -> int:
     """
     가격 계산 기준 결정.
-    대표 메뉴(is_representative=True)가 있으면 그 중 budget_cap+1000 이하인 것의
+    대표 메뉴(is_representative=True)가 있으면 그 중 budget_cap+2000 이하인 것의
     최고 금액을 사용 (가장 비싸지만 예산 내). 없으면 restaurant.price 사용.
     """
     rep_menus = [m for m in (restaurant.menus or []) if m.is_representative]
     if rep_menus:
-        affordable = [m.price for m in rep_menus if m.price <= budget_cap + 1000]
+        affordable = [m.price for m in rep_menus if m.price <= budget_cap + 2000]
         if affordable:
             return max(affordable)
         # 대표 메뉴 전부 예산 초과 → 가장 싼 대표 메뉴
@@ -154,7 +154,7 @@ def _effective_price(restaurant: Restaurant, budget_cap: int) -> int:
 def calc_price_fit(restaurant: Restaurant, budget_cap: int) -> float:
     """가격 적합도 — 대표 메뉴 기준, 없으면 restaurant.price 기준"""
     price = _effective_price(restaurant, budget_cap)
-    if price > budget_cap + 1000:
+    if price > budget_cap + 2000:
         return 0.0
     ratio = price / budget_cap if budget_cap > 0 else 1.0
     # 예산의 70~90% 범위가 최적
@@ -275,14 +275,21 @@ def recommend(db: Session, req: RecommendRequest) -> dict:
         if travel_est > max_one_way:
             continue
 
-        # 예산 필터 — 대표 메뉴 기준 (없으면 restaurant.price), 오차 ±1000원
+        # 예산 필터 — 대표 메뉴 기준 (없으면 restaurant.price), 오차 ±2000원
         rep_menus = [m for m in (r.menus or []) if m.is_representative]
         if rep_menus:
-            # 대표 메뉴 중 하나라도 budget+1000 이하면 포함
-            if not any(m.price <= budget_cap + 1000 for m in rep_menus):
-                continue
+            affordable = [m for m in rep_menus if m.price <= budget_cap + 2000]
+            if len(rep_menus) >= 2:
+                # 대표 메뉴가 2개 이상 → 그 중 2개 이상이 예산 내여야 포함
+                if len(affordable) < 2:
+                    continue
+            else:
+                # 대표 메뉴가 1개뿐 → 그 1개가 예산 내면 포함
+                if not affordable:
+                    continue
         else:
-            if r.price > budget_cap + 1000:
+            # 메뉴 미수집 → restaurant.price 기준, 오차 ±2000원
+            if r.price > budget_cap + 2000:
                 continue
 
         # 술자리 하드 필터 — 주류 미판매 식당 제외
