@@ -296,10 +296,8 @@ def recommend(db: Session, req: RecommendRequest) -> dict:
         if meal_time == "술자리" and not r.has_alcohol:
             continue
 
-        # KST 영업 중 필터 — 목표 시각 기준 (없으면 현재 시각)
-        open_status = get_open_status(r.schedule_json or "{}", target_dt=target_dt)
-        if not open_status["is_open"]:
-            continue
+        # 영업 여부 — 연구 단계에서는 하드 필터링 안 함
+        # (영업 중/닫힘 표시는 카드 is_open 필드에서 처리)
 
         filtered.append((r, int(round(travel_est)), int(round(walk_est))))
 

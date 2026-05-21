@@ -7,7 +7,7 @@ from typing import List
 class Settings(BaseSettings):
     # ─── 앱 기본 ──────────────────────────────────────────────
     APP_NAME: str = "한끼루트 API"
-    APP_VERSION: str = "1.3.1"
+    APP_VERSION: str = "1.3.2"
     DEBUG: bool = False   # Railway 환경변수로 개발 시에만 True
 
     # ─── 데이터베이스 ──────────────────────────────────────────
@@ -67,10 +67,10 @@ class Settings(BaseSettings):
     RESEARCH_AREA_NAME: str = "광주 용봉동"
     RESEARCH_LAT_CENTER: float = 35.1762   # 전남대 정문 기준
     RESEARCH_LNG_CENTER: float = 126.9097
-    RESEARCH_LAT_MIN: float = 35.162       # 남쪽 경계
-    RESEARCH_LAT_MAX: float = 35.190       # 북쪽 경계
-    RESEARCH_LNG_MIN: float = 126.888      # 서쪽 경계
-    RESEARCH_LNG_MAX: float = 126.930      # 동쪽 경계
+    RESEARCH_LAT_MIN: float = 35.158       # 남쪽 경계 (±0.004° 확장)
+    RESEARCH_LAT_MAX: float = 35.194       # 북쪽 경계 (±0.004° 확장)
+    RESEARCH_LNG_MIN: float = 126.884      # 서쪽 경계 (±0.004° 확장)
+    RESEARCH_LNG_MAX: float = 126.934      # 동쪽 경계 (±0.004° 확장)
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
