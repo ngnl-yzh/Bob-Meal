@@ -540,7 +540,11 @@ async function doLogin() {
     applyStats(d);
     loadAll();
   } else {
-    document.getElementById('login-error').textContent = '관리자 키가 올바르지 않습니다.';
+    const status = resp.status;
+    let msg = '관리자 키가 올바르지 않습니다.';
+    if (status === 503) msg = '⚠️ ADMIN_SECRET_KEY 미설정 — Railway Variables 확인 필요';
+    else if (status === 403) msg = '❌ 키 불일치 — 입력값을 다시 확인하세요';
+    document.getElementById('login-error').textContent = msg;
   }
 }
 document.getElementById('key-input').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
