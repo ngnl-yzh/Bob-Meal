@@ -2,6 +2,18 @@
 
 ---
 
+## [1.4.7] — 2026-05-21
+
+### Railway 배포 안정성 강화 (헬스체크 타임아웃 + alembic 실패 허용)
+
+**Backend**
+- `backend/railway.toml`:
+  - `healthcheckTimeout`: 30 → **60**초 (alembic 마이그레이션 시간 여유 확보)
+  - `startCommand`: `&&` → `;` (alembic upgrade 실패해도 uvicorn 기동 보장)
+- 이중 안전장치: alembic 실패 → uvicorn 기동 → `main.py` lifespan의 `create_all()` try/except 처리
+
+---
+
 ## [1.4.6] — 2026-05-21
 
 ### 카카오 수집 격자 고밀도화 + 핵심 상권 모드 추가
