@@ -2,6 +2,38 @@
 
 ---
 
+## [1.4.0+5] — 2026-05-21
+
+### 서비스 범위 확장: 용봉동 → 광주광역시 북구 + 추천 진단 도구
+
+#### 진단 결과 — "3개만 나오는 이유" 전부 확인
+| 원인 | 내용 |
+|------|------|
+| DB 식당 수 부족 | Kakao 수집 미실행·소량으로 실제 식당 데이터가 거의 없음 |
+| 스키마 기본 좌표 버그 | `lat` 기본값이 충장로(동구, 35.1468) → 용봉동과 3.3km 이격 → 거리 필터 전멸 |
+| `is_open` 하드 필터 | v1.3.2에서 수정됨 (영업시간 미수집 식당이 닫힘으로 판정되어 탈락) |
+| `if lat and lng:` 버그 | lat=0.0 엣지케이스 방어 미흡 |
+
+**Backend**
+- `config.py`: 연구 범위 → **광주 북구** (35.13~35.28 / 126.83~127.02), 중심 35.185/126.912
+- `schemas.py`: `lat/lng` 기본값 `충장로 좌표` → `None` (recommender 폴백 사용)
+- `recommender.py`: `if lat and lng:` → `if lat is not None and lng is not None:`
+- `recommend.py`: `GET /api/recommend/debug` 엔드포인트 추가
+  - DB 현황, bbox 통계, 거리 필터 시뮬레이션, 식당 샘플 반환
+- `collect_restaurants.py`: `bukgu` 그리드 추가 (35.13~35.28 / 126.83~127.02, step 0.8km)
+  - 수집 기본 지역: `yongbong` → `bukgu`
+- `admin.py`: 배너·탭·셀렉트·JS 필터 모두 북구로 업데이트
+
+**Flutter**
+- `config.dart`: `focusLat/Lng` → 북구 중심(35.185/126.912), `focusAreaName` → `광주 북구`
+  - `focusRadiusM`: 2000m → 5000m (북구 커버)
+- `pubspec.yaml`: `1.3.0+4` → `1.4.0+5`
+
+> **운영 가이드**: 배포 후 관리자 UI에서 "광주 북구" 수집 실행 필요
+> `/api/recommend/debug` 로 DB 현황과 필터 탈락 원인 실시간 확인 가능
+
+---
+
 ## [1.3.2] — 2026-05-21
 
 ### 식당 노출 수 개선 (영업 여부 하드 필터 제거)

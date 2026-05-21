@@ -7,7 +7,7 @@ from typing import List
 class Settings(BaseSettings):
     # ─── 앱 기본 ──────────────────────────────────────────────
     APP_NAME: str = "한끼루트 API"
-    APP_VERSION: str = "1.3.2"
+    APP_VERSION: str = "1.4.0"
     DEBUG: bool = False   # Railway 환경변수로 개발 시에만 True
 
     # ─── 데이터베이스 ──────────────────────────────────────────
@@ -62,15 +62,15 @@ class Settings(BaseSettings):
     SPEED_CAR: int = 500
     MIN_MEAL_MINUTES: int = 20
 
-    # ─── 연구 범위 (광주광역시 북구 용봉동) ────────────────────
-    # 전남대학교 캠퍼스를 포함한 용봉동 및 인접 상권
-    RESEARCH_AREA_NAME: str = "광주 용봉동"
-    RESEARCH_LAT_CENTER: float = 35.1762   # 전남대 정문 기준
-    RESEARCH_LNG_CENTER: float = 126.9097
-    RESEARCH_LAT_MIN: float = 35.158       # 남쪽 경계 (±0.004° 확장)
-    RESEARCH_LAT_MAX: float = 35.194       # 북쪽 경계 (±0.004° 확장)
-    RESEARCH_LNG_MIN: float = 126.884      # 서쪽 경계 (±0.004° 확장)
-    RESEARCH_LNG_MAX: float = 126.934      # 동쪽 경계 (±0.004° 확장)
+    # ─── 연구 범위 (광주광역시 북구) ───────────────────────────
+    # 용봉동(전남대) 중심 + 운암·중흥·일곡·두암·오치동 등 북구 전체 상권
+    RESEARCH_AREA_NAME: str = "광주 북구"
+    RESEARCH_LAT_CENTER: float = 35.185    # 북구 중심 (운암동·일곡동 사이)
+    RESEARCH_LNG_CENTER: float = 126.912
+    RESEARCH_LAT_MIN: float = 35.13        # 남쪽 경계 (임동·우산동)
+    RESEARCH_LAT_MAX: float = 35.28        # 북쪽 경계 (충효동·담양 접경)
+    RESEARCH_LNG_MIN: float = 126.83       # 서쪽 경계 (동림동·양산동)
+    RESEARCH_LNG_MAX: float = 127.02       # 동쪽 경계 (본량동)
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 

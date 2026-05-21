@@ -232,12 +232,12 @@ def recommend(db: Session, req: RecommendRequest) -> dict:
     radius = calc_radius_meters(req.transport.value, req.available_minutes)
     budget_cap = get_budget_cap(req.identity.value, req.price_mode.value, req.price_max)
 
-    # 1) 활성 식당 + 연구 범위(용봉동 바운딩박스) 필터 + 대표 메뉴 eager-load
+    # 1) 활성 식당 + 연구 범위(광주 북구 바운딩박스) 필터 + 대표 메뉴 eager-load
     restaurants: List[Restaurant] = (
         db.query(Restaurant)
         .filter(
             Restaurant.is_active == True,
-            # 연구 단계: 용봉동 바운딩박스 내 식당만 노출
+            # 연구 단계: 광주 북구 바운딩박스 내 식당만 노출
             Restaurant.lat >= settings.RESEARCH_LAT_MIN,
             Restaurant.lat <= settings.RESEARCH_LAT_MAX,
             Restaurant.lng >= settings.RESEARCH_LNG_MIN,
@@ -249,7 +249,7 @@ def recommend(db: Session, req: RecommendRequest) -> dict:
 
     meal_time = req.meal_time.value  # "아침"/"점심"/"저녁"/"술자리"
 
-    # 사용자 위치 미제공 시 용봉동 중심으로 폴백 (GPS 거부·실패 시)
+    # 사용자 위치 미제공 시 북구 중심으로 폴백 (GPS 거부·실패 시)
     lat = req.lat if req.lat is not None else settings.RESEARCH_LAT_CENTER
     lng = req.lng if req.lng is not None else settings.RESEARCH_LNG_CENTER
 
@@ -263,7 +263,8 @@ def recommend(db: Session, req: RecommendRequest) -> dict:
     filtered: List[Tuple[Restaurant, int, int]] = []
     for r in restaurants:
         # 거리 필터 (GPS 좌표 기반 Haversine — 폴백 포함 항상 유효)
-        if lat and lng:
+        # ※ `if lat is not None` 체크: lat=0.0 같은 엣지케이스 방어
+        if lat is not None and lng is not None:
             dist = distance_meters(lat, lng, r.lat, r.lng)
             travel_est = dist / speed                     # 이동수단 기준 (분) — 필터용
             walk_est   = dist / settings.SPEED_WALK       # 도보 환산 (분) — 표시용

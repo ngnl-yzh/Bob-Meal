@@ -55,8 +55,8 @@ class RecommendRequest(BaseModel):
     meal_time: MealTimeEnum = MealTimeEnum.점심   # 아침/점심/저녁/술자리
     party_size: int = 1
     location_type: LocationTypeEnum = LocationTypeEnum.gps
-    lat: Optional[float] = 35.1468   # 광주 동구 충장로 기본값
-    lng: Optional[float] = 126.9162
+    lat: Optional[float] = None   # None이면 recommender가 RESEARCH_LAT_CENTER로 폴백
+    lng: Optional[float] = None
     transport: TransportEnum = TransportEnum.도보
     available_minutes: int = 60       # 30 / 60 / 90 / 120
     price_mode: PriceModeEnum = PriceModeEnum.default

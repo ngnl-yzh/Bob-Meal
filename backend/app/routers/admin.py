@@ -104,7 +104,7 @@ def _run_collect(region: str, limit: int | None, mark_inactive: bool = False):
         if region == "all":
             regions = ["gwangju", "jeonnam"]
         else:
-            regions = [region]  # yongbong / gwangju / jeonnam
+            regions = [region]  # bukgu / yongbong / gwangju / jeonnam
         count = collect(
             regions,
             limit=limit,
@@ -348,8 +348,8 @@ _ADMIN_HTML = """<!DOCTYPE html>
     <!-- 연구 범위 배너 -->
     <div style="background:#fff3e0;border-left:4px solid #FF6B35;border-radius:10px;padding:12px 18px;margin-bottom:18px;display:flex;align-items:center;gap:10px;font-size:13px;">
       <span style="font-size:18px;">🔬</span>
-      <span><strong>연구 단계</strong> — 서비스 범위: <strong>광주광역시 북구 용봉동</strong>
-        (위도 35.162~35.190 · 경도 126.888~126.930)</span>
+      <span><strong>연구 단계</strong> — 서비스 범위: <strong>광주광역시 북구</strong>
+        (위도 35.13~35.28 · 경도 126.83~127.02)</span>
     </div>
 
     <!-- 통계 카드 -->
@@ -385,7 +385,8 @@ _ADMIN_HTML = """<!DOCTYPE html>
       <div class="section-title">📥 데이터 수집</div>
       <div class="collect-row">
         <select id="c-region">
-          <option value="yongbong" selected>🔬 용봉동 (연구 범위)</option>
+          <option value="bukgu" selected>🔬 광주 북구 (연구 범위)</option>
+          <option value="yongbong">🔍 용봉동 (세밀 수집)</option>
           <option value="gwangju">광주 전체</option>
           <option value="jeonnam">전남</option>
           <option value="all">전체 (광주 + 전남)</option>
@@ -406,7 +407,8 @@ _ADMIN_HTML = """<!DOCTYPE html>
       <div class="section-title">🏪 수집된 식당</div>
 
       <div class="tabs">
-        <button class="tab-btn active" onclick="setTab('yongbong',this)">🔬 용봉동</button>
+        <button class="tab-btn active" onclick="setTab('bukgu',this)">🔬 광주 북구</button>
+        <button class="tab-btn" onclick="setTab('yongbong',this)">용봉동</button>
         <button class="tab-btn" onclick="setTab('all',this)">전체</button>
         <button class="tab-btn" onclick="setTab('광주',this)">광주</button>
         <button class="tab-btn" onclick="setTab('전남',this)">전남</button>
@@ -462,7 +464,7 @@ const PER_PAGE = 50;
 let adminKey = sessionStorage.getItem('hkAdminKey') || '';
 let allData = [];
 let filtered = [];
-let curRegion = 'yongbong'; // 연구 단계 기본값
+let curRegion = 'bukgu'; // 연구 단계 기본값
 let curPage = 1;
 let sortField = 'name';
 let sortAsc = true;
@@ -614,10 +616,15 @@ function parseAddr(addr) {
 // ── 필터 드롭다운 ──────────────────────────────────────
 function populateDongFilter() {
   let base;
-  if (curRegion === 'yongbong') {
+  if (curRegion === 'bukgu') {
+    base = allData.filter(r =>
+      (r.address || '').includes('북구') ||
+      (r.lat >= 35.13 && r.lat <= 35.28 && r.lng >= 126.83 && r.lng <= 127.02)
+    );
+  } else if (curRegion === 'yongbong') {
     base = allData.filter(r =>
       (r.address || '').includes('용봉동') ||
-      (r.lat >= 35.162 && r.lat <= 35.190 && r.lng >= 126.888 && r.lng <= 126.930)
+      (r.lat >= 35.158 && r.lat <= 35.194 && r.lng >= 126.884 && r.lng <= 126.934)
     );
   } else if (curRegion === 'all') {
     base = allData;
@@ -655,11 +662,16 @@ function getFiltered() {
   const active = v('q-active');
 
   let list = allData;
-  if (curRegion === 'yongbong') {
-    // 연구 범위: 주소에 용봉동 포함 OR 용봉동 바운딩박스 내 좌표
+  if (curRegion === 'bukgu') {
+    // 연구 범위: 주소에 북구 포함 OR 북구 bbox 내 좌표
+    list = list.filter(r =>
+      (r.address || '').includes('북구') ||
+      (r.lat >= 35.13 && r.lat <= 35.28 && r.lng >= 126.83 && r.lng <= 127.02)
+    );
+  } else if (curRegion === 'yongbong') {
     list = list.filter(r =>
       (r.address || '').includes('용봉동') ||
-      (r.lat >= 35.162 && r.lat <= 35.190 && r.lng >= 126.888 && r.lng <= 126.930)
+      (r.lat >= 35.158 && r.lat <= 35.194 && r.lng >= 126.884 && r.lng <= 126.934)
     );
   } else if (curRegion !== 'all') {
     list = list.filter(r => r._region === curRegion);
@@ -767,7 +779,7 @@ def admin_ui():
 @router.post("/collect", summary="식당 데이터 수집 시작")
 def start_collect(
     background_tasks: BackgroundTasks,
-    region: str = "yongbong",      # yongbong (기본) / gwangju / jeonnam / all
+    region: str = "bukgu",         # bukgu (기본) / yongbong / gwangju / jeonnam / all
     limit: int | None = None,
     mark_inactive: bool = False,  # True = 수집 후 미발견 식당 비활성화 (3개월 주기 재수집용)
     x_admin_key: str = Header(..., alias="X-Admin-Key"),

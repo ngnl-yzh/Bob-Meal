@@ -119,12 +119,19 @@ _DEFAULTS: dict[str, dict] = {
 # ──────────────────────────────────────────────────────────────
 _GRIDS: dict[str, dict] = {
     # ── 연구 범위 (기본 수집 대상) ────────────────────────────────
+    "bukgu": {
+        "lat_range": (35.13, 35.28),
+        "lng_range": (126.83, 127.02),
+        "step_km":  0.8,     # 북구 전체 균일 수집
+        "radius":   500,     # 반경 500m (중복 최소화)
+        "desc":     "광주 북구",
+    },
     "yongbong": {
-        "lat_range": (35.162, 35.190),
-        "lng_range": (126.888, 126.930),
-        "step_km":  0.3,     # 용봉동 집중 수집 — 매우 촘촘하게
+        "lat_range": (35.158, 35.194),
+        "lng_range": (126.884, 126.934),
+        "step_km":  0.3,     # 용봉동 집중 수집 — 촘촘하게
         "radius":   250,     # 반경 최소화 (중복 억제)
-        "desc":     "광주 북구 용봉동",
+        "desc":     "광주 북구 용봉동 (세밀)",
     },
     # ── 확장 수집 (배포 단계에서 활성화) ─────────────────────────
     "gwangju": {
@@ -455,9 +462,9 @@ def main():
     )
     parser.add_argument(
         "--region",
-        choices=["yongbong", "gwangju", "jeonnam", "all"],
-        default="yongbong",
-        help="수집 지역 (기본: yongbong — 연구 단계)",
+        choices=["bukgu", "yongbong", "gwangju", "jeonnam", "all"],
+        default="bukgu",
+        help="수집 지역 (기본: bukgu — 광주 북구 전체)",
     )
     parser.add_argument(
         "--limit",

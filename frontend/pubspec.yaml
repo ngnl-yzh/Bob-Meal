@@ -1,7 +1,7 @@
 name: hankkirog
 description: "한끼로그 — 대학생·직장인 맞춤형 식사 장소 추천 서비스"
 publish_to: 'none'
-version: 1.3.0+4
+version: 1.4.0+5
 
 environment:
   sdk: '>=3.2.0 <4.0.0'
