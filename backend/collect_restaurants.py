@@ -122,9 +122,17 @@ _GRIDS: dict[str, dict] = {
     "bukgu": {
         "lat_range": (35.13, 35.28),
         "lng_range": (126.83, 127.02),
-        "step_km":  0.8,     # 북구 전체 균일 수집
-        "radius":   500,     # 반경 500m (중복 최소화)
+        "step_km":  0.5,     # 0.8→0.5km: 격자 밀도 ↑ (누락 최소화)
+        "radius":   500,     # 반경 500m
         "desc":     "광주 북구",
+    },
+    "bukgu_dense": {
+        # 상권 밀집 지역(용봉·중흥·운암·일곡) 집중 수집
+        "lat_range": (35.15, 35.23),
+        "lng_range": (126.87, 126.98),
+        "step_km":  0.3,     # 초고밀도
+        "radius":   300,
+        "desc":     "광주 북구 핵심 상권 (초밀도)",
     },
     "yongbong": {
         "lat_range": (35.158, 35.194),
@@ -266,7 +274,7 @@ def collect(
                         break
 
                     for code in _CATEGORY_CODES:
-                        for page in range(1, 4):    # 최대 3페이지 × 15 = 45개/포인트
+                        for page in range(1, 5):    # 최대 4페이지 × 15 = 60개/포인트
                             data = _fetch_page(client, lat, lng, radius, code, page)
                             if not data:
                                 break
@@ -462,9 +470,9 @@ def main():
     )
     parser.add_argument(
         "--region",
-        choices=["bukgu", "yongbong", "gwangju", "jeonnam", "all"],
+        choices=["bukgu", "bukgu_dense", "yongbong", "gwangju", "jeonnam", "all"],
         default="bukgu",
-        help="수집 지역 (기본: bukgu — 광주 북구 전체)",
+        help="수집 지역 (기본: bukgu — 광주 북구 전체 / bukgu_dense — 핵심 상권 초밀도)",
     )
     parser.add_argument(
         "--limit",
